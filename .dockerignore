@@ -1,0 +1,3 @@
+# Docker context is deny-by-default until deployment is designed.
+# Add only reviewed application sources and dependency manifests later.
+**

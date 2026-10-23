@@ -1,0 +1,23 @@
+name: Sensitive path policy
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  sensitive-paths:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Test path rules and Git integration
+        shell: pwsh
+        run: ./scripts/Test-SensitivePaths.ps1
+      - name: Reject sensitive paths in the index and history
+        shell: pwsh
+        run: ./scripts/Check-SensitivePaths.ps1 -IncludeHistory
