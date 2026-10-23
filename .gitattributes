@@ -1,0 +1,21 @@
+* text=auto
+.githooks/* text eol=lf
+*.ps1 text eol=lf
+*.psm1 text eol=lf
+
+.private export-ignore
+**/.private export-ignore
+data export-ignore
+secrets export-ignore
+credentials export-ignore
+uploads export-ignore
+receipts export-ignore
+backups export-ignore
+exports export-ignore
+logs export-ignore
+.env export-ignore
+.env.* export-ignore
+*.pem export-ignore
+*.key export-ignore
+*.p12 export-ignore
+*.pfx export-ignore
