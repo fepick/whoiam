@@ -100,3 +100,7 @@ finally {
         Remove-Item -LiteralPath $resolvedTarget -Recurse -Force
     }
 }
+
+# Expected rejection checks leave a native exit code of 1. Report the overall
+# successful test result explicitly so the GitHub Actions pwsh wrapper agrees.
+exit 0
