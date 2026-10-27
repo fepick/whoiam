@@ -45,6 +45,7 @@ id_ed25519
 node_modules/
 .venv/
 __pycache__/
+.pytest_cache/
 dist/
 build/
 coverage/
