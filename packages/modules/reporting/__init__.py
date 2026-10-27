@@ -64,13 +64,32 @@ class Reporting:
         previous = next(
             (report for report in self.list() if report["date"] == when), None
         )
+        daily = list(grouped.values())
+        notes = []
+        if not daily:
+            notes.append("업무 로그가 아직 입력되지 않았습니다.")
+        if any(len(row["detail"]) > 2000 for row in daily):
+            notes.append(
+                "긴 결과는 요약 표시했습니다. 전체 내용은 원본 업무 로그를 확인해주세요."
+            )
+            for row in daily:
+                if len(row["detail"]) > 2000:
+                    row["detail"] = row["detail"][:1960] + " … (원본 업무 로그 참조)"
+        if len(daily) > MAX_REPORT_ROWS:
+            notes.append(
+                f"진행 {len(daily)}건 중 앞의 100건을 표시했습니다. 전체 기록은 업무 메뉴에서 확인해주세요."
+            )
+        if len(planned) > MAX_REPORT_ROWS:
+            notes.append(
+                f"예정 {len(planned)}건 중 우선순위가 높은 100건을 표시했습니다."
+            )
         return self.save(
             {
                 "id": previous["id"] if previous else uid(),
                 "date": when,
-                "daily": list(grouped.values()),
-                "planned": planned,
-                "note": "업무 로그가 아직 입력되지 않았습니다." if not grouped else "",
+                "daily": daily[:MAX_REPORT_ROWS],
+                "planned": planned[:MAX_REPORT_ROWS],
+                "note": "\n".join(notes),
             },
             attendance_minutes=self.attendance.summary(date)["today_minutes"],
         )
