@@ -23,6 +23,11 @@ POST는 같은 Origin, 세션 쿠키, `X-Whoiam-CSRF`, JSON, 요청 크기 상�
 | `GET /api/snapshot` | 각 모듈의 화면용 공개 조회 |
 | `POST /api/commands` | 아래 모듈 명령 실행 |
 | `GET /api/documents/{reference}` | 인증된 세션의 증빙 첨부 다운로드 |
+| `GET /api/backups`, `POST /api/backups` | 프로필의 백업 목록·수동 백업 |
+| `GET /api/backups/{id}` | 검증한 암호화 DB 백업 다운로드 |
+| `POST /api/backups/restore` | revision·확인값 검사 후 복원, 직전 안전 백업 보존 |
+| `GET /api/autostart`, `POST /api/autostart` | 현재 사용자 로그인 자동 실행 조회·설정 |
+| `POST /api/shutdown` | 변경분 백업 후 정상 종료 |
 
 ## 명령 계약
 
