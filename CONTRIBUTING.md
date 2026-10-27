@@ -1,5 +1,7 @@
 # 개발 규칙과 작업 방법
 
+휴대폰에서 PC의 Codex를 조작하는 개발 환경은 [Tactic Remote 설정](docs/remote-development.md)을 참고합니다.
+
 에이전트와 개발자는 [AGENTS.md](AGENTS.md)의 구조·민감정보 정책을 함께 따릅니다.
 현재 로컬 서버·업무 모듈·웹 콘솔을 구현했으며 아래 Python 규칙을 적용합니다.
 
