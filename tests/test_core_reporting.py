@@ -1,9 +1,10 @@
+from typing import Any
 from uuid import uuid4
 
 import pytest
 
 from packages.core import Core
-from packages.platform.domain import DomainError, moment
+from packages.platform.domain import DomainError, Json, moment
 from packages.platform.storage import EncryptedStore
 
 
@@ -82,3 +83,24 @@ def test_large_report_preserves_source_and_does_not_block_checkout(
     assert len(report["daily"][0]["detail"]) <= 2000
     assert sum(len(entry["note"]) for entry in core.tasks.daily(core.today())) == 2400
     assert core.attendance.active() is None
+
+
+def test_checkout_survives_report_failure_and_retry(
+    store: EncryptedStore, monkeypatch: Any
+) -> None:
+    core = Core(store)
+    core.execute("core.start", {}, str(uuid4()))
+    request_id = str(uuid4())
+    generate = core.reporting.generate
+
+    def fail(when: str) -> Json:
+        raise RuntimeError("synthetic failure")
+
+    monkeypatch.setattr(core.reporting, "generate", fail)
+    first = core.execute("core.command", {"text": "퇴근"}, request_id)
+    assert first["report"] is None
+    assert core.attendance.active() is None
+    monkeypatch.setattr(core.reporting, "generate", generate)
+    retried = core.execute("core.command", {"text": "퇴근"}, request_id)
+    assert retried["report"]["date"] == core.today()
+    assert len(core.attendance.list()) == 1

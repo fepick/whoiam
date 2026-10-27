@@ -8,6 +8,8 @@ from datetime import datetime
 from typing import Callable
 from uuid import UUID
 
+from loguru import logger
+
 from packages.modules.attendance import Attendance
 from packages.modules.inventory import Inventory
 from packages.modules.purchasing import Purchasing
@@ -179,9 +181,8 @@ class Core:
         }
 
     def finish(self, data: Json) -> Json:
-        fields(data, set())
-        self.attendance.event("finish")
-        report = self.reporting.generate(self.today())
+        fields(data, {"date"})
+        report = self.reporting.generate(data.get("date", self.today()))
         return {
             "message": "퇴근과 일일 보고 초안을 기록했습니다.",
             "report": report,
@@ -282,6 +283,14 @@ class Core:
                 {"name": name, "data": data}, sort_keys=True, ensure_ascii=False
             ).encode()
         ).hexdigest()
+        is_finish = name == "core.finish" or (
+            name == "core.command"
+            and isinstance(data.get("text"), str)
+            and data["text"].strip().replace(" ", "") == "퇴근"
+        )
+        if is_finish:
+            fields(data, {"text"} if name == "core.command" else set())
+            return self.durable_finish(request_id, fingerprint)
         with self.store.transaction():
             try:
                 previous = self.commands.get(request_id)
@@ -300,3 +309,41 @@ class Core:
                 {"id": request_id, "fingerprint": fingerprint, "result": result}
             )
             return result
+
+    def durable_finish(self, request_id: str, fingerprint: str) -> Json:
+        with self.store.transaction():
+            try:
+                entry = self.commands.get(request_id)
+            except DomainError as error:
+                if error.status != 404:
+                    raise
+                self.attendance.event("finish")
+                entry = {
+                    "id": request_id,
+                    "fingerprint": fingerprint,
+                    "phase": "finished",
+                    "date": self.today(),
+                }
+                self.commands.put(entry)
+            if entry["fingerprint"] != fingerprint:
+                raise DomainError("같은 요청 ID를 다른 명령에 사용할 수 없습니다.", 409)
+            if entry.get("phase") != "finished":
+                return entry["result"]
+        try:
+            with self.store.transaction():
+                # 다른 재시도가 먼저 보고 생성을 끝낸 경우 그 결과를 사용한다.
+                entry = self.commands.get(request_id)
+                if entry.get("phase") != "finished":
+                    return entry["result"]
+                result = self.finish({"date": entry["date"]})
+                self.commands.put({**entry, "phase": "completed", "result": result})
+                return result
+        except Exception:
+            logger.error(
+                "Report preparation failed after durable checkout; details omitted"
+            )
+            return {
+                "message": "퇴근은 기록했습니다. 보고 생성에 실패했으니 기록 메뉴에서 다시 생성해주세요.",
+                "report": None,
+                "alerts": [],
+            }
