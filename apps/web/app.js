@@ -271,7 +271,7 @@ function materialsView() {
 
 function timeView() {
   const a = data.attendance;
-  return `<div class="records-grid">${weeklyCard()}<section class="card"><div class="card-heading"><h2>오늘의 근무</h2><span>${duration(a.today_minutes)}</span></div><div class="week-bars">${a.daily.map((row,index)=>`<div class="week-bar ${row.date===data.today?'current':''}"><span class="bar-label">${(row.minutes/60).toFixed(1)}h</span><div class="bar" style="height:${Math.min(100,row.minutes/720*100)}%"></div></div>`).join('')}</div><div class="week-days">${['월','화','수','목','금','토','일'].map(label=>`<span>${label}</span>`).join('')}</div><div class="row-actions">${button('manual-time','근무 수동 입력')}${button('payroll','급여 대조')}</div></section></div><section class="card wide-card"><div class="card-heading"><h2>출퇴근 기록</h2><span class="subtle-label">휴게는 명시적으로 입력한 구간만 차감</span></div>${data.sessions.map(session=>`<div class="timeline-item"><div><strong>${esc(localTime(session.start))} → ${session.end?esc(localTime(session.end)):'근무 중'}</strong><small>휴게 ${session.breaks.length}구간 · 정정 ${session.corrections.length}회</small></div>${button('correct-time','정정',session.id)}</div>`).join('')||empty('출근을 기록하면 이곳에 표시됩니다.')}</section><section class="card wide-card"><div class="card-heading"><h2>급여 입금 대조</h2>${button('payroll','월별 입력')}</div>${data.payroll.map(row=>`<div class="timeline-item"><span>${esc(row.month)}</span><div><strong>예상 ${money(row.expected_net)} / 입금 ${row.received_net===null?'미확인':money(row.received_net)}</strong><small>${row.difference===null?'입금 확인 대기':`차이 ${money(row.difference)}`} · ${esc(row.note)}</small></div>${button('payroll','수정',row.month)}</div>`).join('')||empty('예상 실수령액과 실제 입금액을 직접 입력해 비교하세요.')}</section>`;
+  return `<div class="records-grid">${weeklyCard()}<section class="card"><div class="card-heading"><h2>오늘의 근무</h2><span>${duration(a.today_minutes)}</span></div><div class="week-bars">${a.daily.map((row,index)=>`<div class="week-bar ${row.date===data.today?'current':''}"><span class="bar-label">${(row.minutes/60).toFixed(1)}h</span><div class="bar" style="height:${Math.min(100,row.minutes/720*100)}%"></div></div>`).join('')}</div><div class="week-days">${['월','화','수','목','금','토','일'].map(label=>`<span>${label}</span>`).join('')}</div><div class="row-actions">${button('manual-time','근무 수동 입력')}${button('attendance-history','변경 이력')}${button('payroll','급여 대조')}</div></section></div><section class="card wide-card"><div class="card-heading"><h2>출퇴근 기록</h2><span class="subtle-label">휴게는 명시적으로 입력한 구간만 차감</span></div>${data.sessions.map(session=>`<div class="timeline-item"><div><strong>${esc(localTime(session.start))} → ${session.end?esc(localTime(session.end)):'근무 중'}</strong><small>${session.source==='manual'||session.corrections.length?'수동 입력':'출퇴근 기록'} · 휴게 ${session.breaks.length}구간 · 정정 ${session.corrections.length}회</small></div>${button('correct-time','정정',session.id)}</div>`).join('')||empty('출근을 기록하면 이곳에 표시됩니다.')}</section><section class="card wide-card"><div class="card-heading"><h2>급여 입금 대조</h2>${button('payroll','월별 입력')}</div>${data.payroll.map(row=>`<div class="timeline-item"><span>${esc(row.month)}</span><div><strong>예상 ${money(row.expected_net)} / 입금 ${row.received_net===null?'미확인':money(row.received_net)}</strong><small>${row.difference===null?'입금 확인 대기':`차이 ${money(row.difference)}`} · ${esc(row.note)}</small></div>${button('payroll','수정',row.month)}</div>`).join('')||empty('예상 실수령액과 실제 입금액을 직접 입력해 비교하세요.')}</section>`;
 }
 
 function reportView() {
@@ -319,7 +319,7 @@ async function personalAction(action, id) {
     backupRevision = result.revision;
     showDialog('암호화 백업·복원',
       `<p>복원 전 현재 데이터를 안전 백업으로 남깁니다. 다른 저장소·프로필의 백업은 복원하지 않습니다.</p>${result.backups.map(row=>`<div class="receipt-line"><strong>${esc(localTime(row.created_at))}</strong><p>${row.reason==='automatic'?'자동 백업':row.reason==='before-restore'?'복원 전 안전 백업':'수동 백업'} · ${(row.size/1024/1024).toFixed(2)}MB</p>${button('restore-backup','이 시점으로 복원',row.id)} <a class="button button-outline" href="/api/backups/${esc(row.id)}" download>암호화 백업 파일 저장</a></div>`).join('')||empty('백업이 없습니다.')}${button('close','닫기')}`
-      );
+    );
     return true;
   }
   if (action === 'restore-backup') {
@@ -338,7 +338,7 @@ async function personalAction(action, id) {
     const result = await api('autostart');
     showDialog('로그인 자동 실행',
       `<p>현재 사용자로 Windows에 로그인하면 이 프로필의 앱을 실행합니다. 관리자 권한이나 로그인 암호를 저장하지 않습니다.</p><p>현재 상태: <strong>${result.enabled?'켜짐':'꺼짐'}</strong></p>${button(result.enabled?'disable-startup':'enable-startup',result.enabled?'자동 실행 끄기':'자동 실행 켜기','','button-primary')}${button('close','닫기')}`
-      );
+    );
     return true;
   }
   if (action === 'enable-startup' || action === 'disable-startup') {
@@ -450,24 +450,41 @@ function showOrder(id) {
   );
 }
 
-function showTime(id = '') {
-  const session = data.sessions.find(s => s.id === id);
-  showDialog(id ? '근무 기록 정정' : '근무 수동 입력',
-    `<p class="subtle-label">완료된 실제 근무를 입력합니다. 아직 지나지 않은 퇴근 예정 시각은 저장할 수 없습니다. 근무 중이라면 홈의 출근 기능을 사용해주세요.</p>${field('출근 시각 (한국 시간)','session_start',localInput(session?.start),'datetime-local','required')}${field('퇴근 시각 (한국 시간)','session_end',localInput(session?.end),'datetime-local','required')}<p id="manual-time-preview" class="subtle-label" role="status" aria-live="polite">${esc(manualTimeSummary(localInput(session?.start),localInput(session?.end)))}</p><div id="manual-breaks">${(session?.breaks||[]).map(interval=>breakLine(interval)).join('')}</div>${button('add-break','휴게 구간 추가')}${area('입력·정정 사유','reason','')}`,
+function showTime(id = '', version = null) {
+  const session = version || data.sessions.find(s => s.id === id);
+  showDialog(version ? '이력으로 근무 다시 입력' : id ? '근무 기록 정정' : '근무 수동 입력',
+    `<p class="subtle-label">수동 입력이 우선합니다. 겹치는 기존 근무 기록 전체는 이력으로 보관하고 지금 입력한 근무·휴게로 대체합니다. 아직 지나지 않은 퇴근 예정 시각은 저장할 수 없습니다.</p>${field('출근 시각 (한국 시간)','session_start',localInput(session?.start),'datetime-local','required')}${field('퇴근 시각 (한국 시간)','session_end',localInput(session?.end),'datetime-local','required')}<p id="manual-time-preview" class="subtle-label" role="status" aria-live="polite">${esc(manualTimeSummary(localInput(session?.start),localInput(session?.end),id))}</p><div id="manual-breaks">${(session?.breaks||[]).map(interval=>breakLine(interval)).join('')}</div>${button('add-break','휴게 구간 추가')}${area('입력·정정 사유','reason',version?'이력에서 다시 입력':'')}`,
     'time', id);
 }
 
-function manualTimeSummary(start, end) {
+function manualOverlaps(start, end, id = '') {
+  const left = Date.parse(zoned(start));
+  const right = Date.parse(zoned(end));
+  if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) return [];
+  return (data?.sessions || []).filter(session => session.id !== id && left < (session.end ? Date
+    .parse(session.end) : Date.now()) && right > Date.parse(session.start));
+}
+
+function manualTimeSummary(start, end, id = '') {
   const label = value => value ? value.replace('T', ' ') : '미입력';
-  return `입력 시각 확인 (한국 시간 · 24시간제): ${label(start)} → ${label(end)}`;
+  const count = manualOverlaps(start, end, id).length;
+  return `입력 시각 확인 (한국 시간 · 24시간제): ${label(start)} → ${label(end)}${count ? ` · 겹치는 기존 기록 ${count}건을 이력에 보관하고 수동 값으로 대체합니다.` : ''}`;
 }
 
 document.addEventListener('input', event => {
   const form = event.target.closest('form[data-form="time"]');
   if (!form) return;
   const preview = form.querySelector('#manual-time-preview');
-  if (preview) preview.textContent = manualTimeSummary(form.elements.namedItem('session_start').value, form.elements.namedItem('session_end').value);
+  if (preview) preview.textContent = manualTimeSummary(form.elements.namedItem('session_start')
+    .value, form.elements.namedItem('session_end').value, form.dataset.id);
 });
+
+function showAttendanceHistory() {
+  const history = data.attendance_history || [];
+  showDialog('근무 변경 이력',
+    `<p>이 기록은 현재 근무 합계에서 제외됩니다. 다시 입력하면 현재 기록보다 우선 적용됩니다.</p>${history.map(version=>`<div class="receipt-line"><strong>${esc(localTime(version.start))} → ${version.end?esc(localTime(version.end)):'종료 미기록'}</strong><p>${version.kind==='replaced'?'수동 입력으로 대체':'정정 전 기록'} · ${esc(localTime(version.at))}</p><p>${esc(version.reason)}</p><p class="subtle-label">${version.breaks.map(interval=>`휴게 ${esc(localTime(interval.start))} → ${interval.end?esc(localTime(interval.end)):'종료 미기록'}`).join('<br>')||'휴게 없음'}</p>${button('reuse-attendance','이 기록으로 다시 입력',version.id)}</div>`).join('')||empty('보관된 변경 이력이 없습니다.')}${button('close','닫기')}`
+    );
+}
 
 function breakLine(interval = {}) {
   return `<fieldset class="break-line">${field('휴게 시작','start',localInput(interval.start),'datetime-local','required')}${field('휴게 종료','end',localInput(interval.end),'datetime-local','required')}${button('remove-line','휴게 제거')}</fieldset>`;
@@ -656,6 +673,16 @@ async function act(action, id) {
   }
   if (action === 'manual-time' || action === 'correct-time') {
     showTime(id);
+    return;
+  }
+  if (action === 'attendance-history') {
+    showAttendanceHistory();
+    return;
+  }
+  if (action === 'reuse-attendance') {
+    const version = (data.attendance_history || []).find(row => row.id === id);
+    if (!version) throw new Error('이력 목록을 다시 불러와주세요.');
+    showTime('', version);
     return;
   }
   if (action === 'add-break') {
@@ -879,7 +906,7 @@ document.addEventListener('submit', async event => {
         start: zoned(line.querySelector('[name="start"]').value),
         end: zoned(line.querySelector('[name="end"]').value)
       }));
-      await run('attendance.record', {
+      const recorded = await run('attendance.record', {
         ...(id ? {
           id
         } : {}),
@@ -888,6 +915,12 @@ document.addEventListener('submit', async event => {
         breaks,
         reason
       });
+      closeDialog();
+      render();
+      toast(recorded.replaces?.length ?
+        `수동 근무를 저장했습니다. 겹친 기존 기록 ${recorded.replaces.length}건은 이력에 보관했습니다.` :
+        '수동 근무를 저장했습니다.');
+      return;
     }
     if (type === 'payroll') {
       await run('attendance.payroll', {
