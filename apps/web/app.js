@@ -452,8 +452,9 @@ function showOrder(id) {
 
 function showTime(id = '', version = null) {
   const session = version || data.sessions.find(s => s.id === id);
+  const breaks = session ? session.breaks : [defaultLunch(data.today)];
   showDialog(version ? '이력으로 근무 다시 입력' : id ? '근무 기록 정정' : '근무 수동 입력',
-    `<p class="subtle-label">수동 입력이 우선합니다. 겹치는 기존 근무 기록 전체는 이력으로 보관하고 지금 입력한 근무·휴게로 대체합니다. 아직 지나지 않은 퇴근 예정 시각은 저장할 수 없습니다.</p>${field('출근 시각 (한국 시간)','session_start',localInput(session?.start),'datetime-local','required')}${field('퇴근 시각 (한국 시간)','session_end',localInput(session?.end),'datetime-local','required')}<p id="manual-time-preview" class="subtle-label" role="status" aria-live="polite">${esc(manualTimeSummary(localInput(session?.start),localInput(session?.end),id))}</p><div id="manual-breaks">${(session?.breaks||[]).map(interval=>breakLine(interval)).join('')}</div>${button('add-break','휴게 구간 추가')}${area('입력·정정 사유','reason',version?'이력에서 다시 입력':'')}`,
+    `<p class="subtle-label">수동 입력이 우선합니다. 겹치는 기존 근무 기록 전체는 이력으로 보관하고 지금 입력한 근무·휴게로 대체합니다. 기본 휴게는 12:00~13:00이며 출퇴근에 걸쳐도 근무와 겹치는 시간만 차감합니다. 아직 지나지 않은 퇴근 예정 시각은 저장할 수 없습니다.</p>${field('출근 시각 (한국 시간)','session_start',localInput(session?.start),'datetime-local','required')}${field('퇴근 시각 (한국 시간)','session_end',localInput(session?.end),'datetime-local','required')}<p id="manual-time-preview" class="subtle-label" role="status" aria-live="polite">${esc(manualTimeSummary(localInput(session?.start),localInput(session?.end),id))}</p><div id="manual-breaks">${breaks.map(interval=>breakLine(interval,!session)).join('')}</div>${button('add-break','휴게 구간 추가')}${area('입력·정정 사유','reason',version?'이력에서 다시 입력':'')}`,
     'time', id);
 }
 
@@ -474,6 +475,9 @@ function manualTimeSummary(start, end, id = '') {
 document.addEventListener('input', event => {
   const form = event.target.closest('form[data-form="time"]');
   if (!form) return;
+  const line = event.target.closest('.break-line');
+  if (line) delete line.dataset.defaultLunch;
+  if (['session_start', 'session_end'].includes(event.target.name)) syncDefaultLunch(form);
   const preview = form.querySelector('#manual-time-preview');
   if (preview) preview.textContent = manualTimeSummary(form.elements.namedItem('session_start')
     .value, form.elements.namedItem('session_end').value, form.dataset.id);
@@ -483,11 +487,28 @@ function showAttendanceHistory() {
   const history = data.attendance_history || [];
   showDialog('근무 변경 이력',
     `<p>이 기록은 현재 근무 합계에서 제외됩니다. 다시 입력하면 현재 기록보다 우선 적용됩니다.</p>${history.map(version=>`<div class="receipt-line"><strong>${esc(localTime(version.start))} → ${version.end?esc(localTime(version.end)):'종료 미기록'}</strong><p>${version.kind==='replaced'?'수동 입력으로 대체':'정정 전 기록'} · ${esc(localTime(version.at))}</p><p>${esc(version.reason)}</p><p class="subtle-label">${version.breaks.map(interval=>`휴게 ${esc(localTime(interval.start))} → ${interval.end?esc(localTime(interval.end)):'종료 미기록'}`).join('<br>')||'휴게 없음'}</p>${button('reuse-attendance','이 기록으로 다시 입력',version.id)}</div>`).join('')||empty('보관된 변경 이력이 없습니다.')}${button('close','닫기')}`
-    );
+  );
 }
 
-function breakLine(interval = {}) {
-  return `<fieldset class="break-line">${field('휴게 시작','start',localInput(interval.start),'datetime-local','required')}${field('휴게 종료','end',localInput(interval.end),'datetime-local','required')}${button('remove-line','휴게 제거')}</fieldset>`;
+function defaultLunch(date) {
+  return {
+    start: zoned(`${date}T12:00`),
+    end: zoned(`${date}T13:00`)
+  };
+}
+
+function syncDefaultLunch(form) {
+  const date = (form.elements.namedItem('session_start').value || form.elements.namedItem(
+    'session_end').value).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  form.querySelectorAll('.break-line[data-default-lunch="true"]').forEach(line => {
+    line.querySelector('[name="start"]').value = `${date}T12:00`;
+    line.querySelector('[name="end"]').value = `${date}T13:00`;
+  });
+}
+
+function breakLine(interval, automatic = false) {
+  return `<fieldset class="break-line" ${automatic?'data-default-lunch="true"':''}>${field('휴게 시작','start',localInput(interval.start),'datetime-local','required')}${field('휴게 종료','end',localInput(interval.end),'datetime-local','required')}${button('remove-line','휴게 제거')}</fieldset>`;
 }
 
 function showSecret(kind = 'credential') {
@@ -686,7 +707,11 @@ async function act(action, id) {
     return;
   }
   if (action === 'add-break') {
-    document.getElementById('manual-breaks').insertAdjacentHTML('beforeend', breakLine());
+    const form = document.querySelector('form[data-form="time"]');
+    const date = (form.elements.namedItem('session_start').value || form.elements.namedItem(
+      'session_end').value || data.today).slice(0, 10);
+    document.getElementById('manual-breaks').insertAdjacentHTML('beforeend', breakLine(
+      defaultLunch(date), true));
     return;
   }
   if (action === 'payroll') {
