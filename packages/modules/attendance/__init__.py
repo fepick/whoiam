@@ -28,7 +28,6 @@ class Attendance:
         self, store: EncryptedStore, clock: Callable[[], datetime] = utcnow
     ) -> None:
         self.store = store
-        self.store = store
         self.clock = clock
         self.sessions = store.scope("attendance.sessions")
         self.payroll = store.scope("attendance.payroll")
@@ -148,17 +147,19 @@ class Attendance:
         if not isinstance(breaks, list) or len(breaks) > 100:
             raise DomainError("휴게 구간을 확인해주세요.")
         normalized = []
-        previous_end = start
+        intervals = []
         for interval in breaks:
             fields(interval, {"start", "end"})
             break_start, break_end = moment(text(interval, "start", 40)), moment(
                 text(interval, "end", 40)
             )
-            if (
-                not start <= break_start < break_end <= end
-                or break_start < previous_end
-            ):
-                raise DomainError("휴게 구간은 근무 안에서 겹치지 않게 입력해주세요.")
+            if break_end <= break_start:
+                raise DomainError("휴게 종료 시각은 휴게 시작 시각보다 늦어야 합니다.")
+            intervals.append((break_start, break_end))
+        previous_end = None
+        for break_start, break_end in sorted(intervals):
+            if previous_end is not None and break_start < previous_end:
+                raise DomainError("휴게 시간끼리는 겹치지 않게 입력해주세요.")
             previous_end = break_end
             normalized.append(
                 {"start": break_start.isoformat(), "end": break_end.isoformat()}
