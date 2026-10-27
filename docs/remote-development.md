@@ -9,7 +9,9 @@ VS Code에서 연 `whoiam` 폴더를 Tactic Remote에서도 프로젝트로 선�
 
 1. [공식 다운로드](https://tacticremote.com/download/)에서 Windows companion을 설치한다.
    2026-10-28 확인한 배포본은 1.12.0 Preview이며 디지털 서명이 없다.
-2. Codex CLI 또는 VS Code의 Codex 확장을 설치한다. 에이전트 로그인은 PC에서 직접 완료한다.
+2. [공식 Codex CLI](https://learn.chatgpt.com/docs/codex/cli)를 현재 Windows 사용자에게 설치한다.
+   VS Code 확장 내부 실행 파일은 일반 앱의 PATH에 등록되지 않을 수 있으므로 독립 CLI 설치를 권장한다.
+   에이전트 로그인은 PC에서 직접 완료한다.
 3. 프로젝트의 Python 개발 환경을 `CONTRIBUTING.md`에 따라 준비한다.
 4. PowerShell 7(`pwsh`)을 사용해 VS Code 터미널에서 다음 명령으로 companion을 실행한다.
 
@@ -18,10 +20,12 @@ pwsh -NoProfile -File scripts/Start-TacticRemote.ps1 -Preview
 pwsh -NoProfile -File scripts/Start-TacticRemote.ps1
 ```
 
-실행 스크립트는 PATH의 `codex.exe`를 먼저 찾고, 없으면 설치된 VS Code Codex 확장에서 찾는다.
+실행 스크립트는 공식 Windows 독립 설치본의 `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`를 우선한다.
+없으면 PATH의 `codex.exe`, 설치된 VS Code Codex 확장 순서로 찾는다.
 프로젝트 `.venv/Scripts`가 있으면 companion의 실행 환경에 추가한다.
 Codex 런타임에 포함된 PowerShell이 있고 `pwsh` 명령이 없으면 그 경로도 추가한다.
 전역 PATH·로그인 정보·방화벽·자동 시작 설정은 수정하지 않는다.
+이 설명은 저장소의 실행 스크립트에 해당한다. 공식 Codex CLI 설치 프로그램은 사용자 PATH에 CLI 경로를 등록한다.
 앱이 이미 실행 중이면 앱의 종료 기능으로 완전히 종료한 뒤 스크립트로 다시 실행해야 새 환경이 적용된다.
 Tactic Remote에서 작업 디렉터리는 별도로 선택해야 한다.
 
@@ -52,6 +56,24 @@ Tactic 계정 로그인과 Codex 로그인은 별개다. PC companion이 실행 
 PC가 절전 중이거나 꺼져 있으면 연결할 수 없다.
 로컬 QR 연결은 같은 네트워크에서 사용하며 외부 Relay 연결을 대신하지 않는다.
 이 문서와 실행 스크립트는 설치·실행 준비만 다룬다. 휴대폰의 실제 연결 성공은 앱에서 확인해야 한다.
+
+## Codex를 찾을 수 없다는 오류
+
+Relay 연결 성공과 Codex 실행 파일 검색은 별개다.
+독립 CLI 설치 후에도 이미 켜진 companion은 이전 PATH를 사용하거나 기존 검색 결과를 유지할 수 있다.
+
+1. Tactic Remote의 종료 기능으로 앱을 완전히 종료한다. 창 닫기가 트레이 최소화라면 트레이에서도 종료한다.
+2. `Start-TacticRemote.ps1 -Preview`에서 독립 CLI 경로가 표시되는지 확인한다.
+3. `Start-TacticRemote.ps1`로 다시 실행하고 휴대폰을 재연결한다.
+4. Codex 에이전트를 다시 선택해 시작한다.
+
+실행 파일의 위치는 다음 명령으로 인증·세션 내용을 읽지 않고 확인할 수 있다.
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\OpenAI\Codex\bin\codex.exe" --version
+```
+
+이후 로그인 요청이 표시되면 PC에서 직접 로그인한다. 로그인 파일을 복사하거나 토큰을 원격 대화에 붙이지 않는다.
 
 ## 프로젝트 데이터 경계
 
