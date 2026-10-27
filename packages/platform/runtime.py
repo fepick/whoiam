@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
+from uuid import uuid4
 
 from packages.platform.domain import DomainError
 
@@ -83,12 +84,20 @@ def private_directory(path: Path) -> None:
 
 
 def write_new_json(path: Path, value: dict) -> None:
-    with path.open("x", encoding="utf-8") as stream:
-        if os.name != "nt":
-            path.chmod(0o600)
-        json.dump(value, stream, ensure_ascii=False)
-        stream.flush()
-        os.fsync(stream.fileno())
+    temporary = path.with_name(f".pending-{uuid4().hex}")
+    try:
+        with temporary.open("x", encoding="utf-8") as stream:
+            if os.name != "nt":
+                temporary.chmod(0o600)
+            json.dump(value, stream, ensure_ascii=False)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if os.name == "nt":
+            os.rename(temporary, path)
+        else:
+            os.link(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 class InstanceLock:
