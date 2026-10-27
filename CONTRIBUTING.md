@@ -1,7 +1,7 @@
 # 개발 규칙과 작업 방법
 
 에이전트와 개발자는 [AGENTS.md](AGENTS.md)의 구조·민감정보 정책을 함께 따릅니다.
-현재는 정적 웹 목업과 설계 문서가 있으며, 아래 Python 규칙은 이후 추가되는 Python 코드에도 적용합니다.
+현재 로컬 서버·업무 모듈·웹 콘솔을 구현했으며 아래 Python 규칙을 적용합니다.
 
 ## 브랜치와 커밋
 
@@ -80,7 +80,8 @@ pwsh -NoProfile -File scripts/Check-SensitivePaths.ps1 -IncludeHistory
 
 pytest는 Python 코드와 테스트가 생기면 관련 변경을 로컬에서 검증할 때 실행합니다.
 `pyproject.toml`의 테스트 수집 경로는 `tests/`로 제한하며 `.private/`를 검색하지 않습니다.
-현재 Python 테스트가 없으므로 테스트가 없다는 결과를 성공한 테스트로 보고하지 않습니다.
+현재 저장소의 Python 테스트는 암호화·접근 경계·업무 계산·트랜잭션·API 흐름을 가상 데이터로 검증합니다.
+OS 보안 저장소는 가짜 백엔드로 검증하며 실제 자격증명에 접근하지 않습니다. CI 자동 pytest는 추가하지 않습니다.
 기존 민감 경로 검사는 로컬 훅과 GitHub CI에 유지합니다. 보호 규칙을 변경하면 `scripts/Test-SensitivePaths.ps1`도 실행합니다.
 
 도구 설정 참고: [black의 pre-commit 연동](https://black.readthedocs.io/en/stable/integrations/source_version_control.html),
