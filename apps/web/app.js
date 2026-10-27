@@ -453,9 +453,21 @@ function showOrder(id) {
 function showTime(id = '') {
   const session = data.sessions.find(s => s.id === id);
   showDialog(id ? '근무 기록 정정' : '근무 수동 입력',
-    `${field('출근 시각 (한국 시간)','session_start',localInput(session?.start),'datetime-local','required')}${field('퇴근 시각 (한국 시간)','session_end',localInput(session?.end),'datetime-local','required')}<div id="manual-breaks">${(session?.breaks||[]).map(interval=>breakLine(interval)).join('')}</div>${button('add-break','휴게 구간 추가')}${area('입력·정정 사유','reason','')}`,
+    `<p class="subtle-label">완료된 실제 근무를 입력합니다. 아직 지나지 않은 퇴근 예정 시각은 저장할 수 없습니다. 근무 중이라면 홈의 출근 기능을 사용해주세요.</p>${field('출근 시각 (한국 시간)','session_start',localInput(session?.start),'datetime-local','required')}${field('퇴근 시각 (한국 시간)','session_end',localInput(session?.end),'datetime-local','required')}<p id="manual-time-preview" class="subtle-label" role="status" aria-live="polite">${esc(manualTimeSummary(localInput(session?.start),localInput(session?.end)))}</p><div id="manual-breaks">${(session?.breaks||[]).map(interval=>breakLine(interval)).join('')}</div>${button('add-break','휴게 구간 추가')}${area('입력·정정 사유','reason','')}`,
     'time', id);
 }
+
+function manualTimeSummary(start, end) {
+  const label = value => value ? value.replace('T', ' ') : '미입력';
+  return `입력 시각 확인 (한국 시간 · 24시간제): ${label(start)} → ${label(end)}`;
+}
+
+document.addEventListener('input', event => {
+  const form = event.target.closest('form[data-form="time"]');
+  if (!form) return;
+  const preview = form.querySelector('#manual-time-preview');
+  if (preview) preview.textContent = manualTimeSummary(form.elements.namedItem('session_start').value, form.elements.namedItem('session_end').value);
+});
 
 function breakLine(interval = {}) {
   return `<fieldset class="break-line">${field('휴게 시작','start',localInput(interval.start),'datetime-local','required')}${field('휴게 종료','end',localInput(interval.end),'datetime-local','required')}${button('remove-line','휴게 제거')}</fieldset>`;
