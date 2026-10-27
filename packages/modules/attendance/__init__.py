@@ -86,12 +86,18 @@ class Attendance:
     def record(self, data: Json) -> Json:
         fields(data, {"id", "start", "end", "breaks", "reason"})
         start, end = moment(text(data, "start", 40)), moment(text(data, "end", 40))
-        if (
-            end <= start
-            or end - start > timedelta(days=7)
-            or end > self.clock() + timedelta(minutes=5)
-        ):
-            raise DomainError("근무 시작·종료 순서와 날짜를 확인해주세요.")
+        if end <= start:
+            raise DomainError(
+                "퇴근 시각은 출근 시각보다 늦어야 합니다. 자정을 넘겼다면 퇴근 날짜를 다음 날로 지정해주세요."
+            )
+        if end - start > timedelta(days=7):
+            raise DomainError(
+                "한 번의 근무 기록은 7일을 넘을 수 없습니다. 출근·퇴근 날짜를 확인해주세요."
+            )
+        if end > self.clock() + timedelta(minutes=5):
+            raise DomainError(
+                "퇴근 시각이 현재보다 미래입니다(시계 오차 5분 허용). 예정 시각은 저장할 수 없으며, 근무 중에는 출근 기능을 사용해주세요."
+            )
         reason = text(data, "reason", 240)
         identifier = text(data, "id", 64, False) or uid()
         breaks = data.get("breaks", [])

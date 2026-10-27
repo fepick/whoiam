@@ -53,3 +53,38 @@ def test_clock_in_cannot_overlap_recent_corrected_end(store: EncryptedStore) -> 
     )
     with pytest.raises(DomainError):
         attendance.event("start")
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "minutes"),
+    [
+        ("2026-10-27T09:00:00+09:00", "2026-10-27T18:00:00+09:00", 540),
+        ("2026-10-27T00:00:00+09:00", "2026-10-27T12:00:00+09:00", 720),
+        ("2026-10-26T23:00:00+09:00", "2026-10-27T02:00:00+09:00", 180),
+    ],
+)
+def test_manual_morning_afternoon_noon_and_midnight(
+    store: EncryptedStore, start: str, end: str, minutes: int
+) -> None:
+    attendance = Attendance(store, lambda: moment("2026-10-27T20:00:00+09:00"))
+    session = attendance.record(
+        {"start": start, "end": end, "reason": "가상 시각 검증"}
+    )
+    assert attendance.seconds(session, moment(start), moment(end)) // 60 == minutes
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "message"),
+    [
+        ("2026-10-27T09:00:00+09:00", "2026-10-27T18:00:00+09:00", "미래"),
+        ("2026-10-26T18:00:00+09:00", "2026-10-26T09:00:00+09:00", "늦어야"),
+        ("2026-10-01T09:00:00+09:00", "2026-10-09T09:00:00+09:00", "7일"),
+    ],
+)
+def test_manual_time_errors_distinguish_future_order_and_duration(
+    store: EncryptedStore, start: str, end: str, message: str
+) -> None:
+    attendance = Attendance(store, lambda: moment("2026-10-27T12:00:00+09:00"))
+    with pytest.raises(DomainError, match=message):
+        attendance.record({"start": start, "end": end, "reason": "가상 오류 검증"})
+    assert attendance.list() == []
