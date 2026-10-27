@@ -15,7 +15,7 @@ function Test-ForbiddenSensitivePath {
     if ($name -match '(?i)^(id_rsa|id_ed25519)$') {
         return $true
     }
-    if ($name -match '(?i)\.(pem|key|p12|pfx|keystore|jks|db|sqlite|sqlite3|log|har|bak|dump|zip|7z|tar|gz)$' -or
+    if ($name -match '(?i)\.(pem|key|p12|pfx|keystore|jks|whoiam-recovery|db|sqlite|sqlite3|log|har|bak|dump|zip|7z|tar|gz)$' -or
         $name -match '(?i)\.(db|sqlite|sqlite3)-.+$') {
         return $true
     }

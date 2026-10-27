@@ -19,3 +19,4 @@ logs export-ignore
 *.key export-ignore
 *.p12 export-ignore
 *.pfx export-ignore
+*.whoiam-recovery export-ignore
