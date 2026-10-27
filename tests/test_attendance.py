@@ -40,3 +40,16 @@ def test_correction_overlap_and_limit(store: EncryptedStore) -> None:
     with pytest.raises(DomainError, match="겹칩니다"):
         attendance.record(record)
     assert attendance.summary(limit=480)["over_limit"]
+
+
+def test_clock_in_cannot_overlap_recent_corrected_end(store: EncryptedStore) -> None:
+    attendance = Attendance(store, lambda: moment("2026-10-27T09:00:00+09:00"))
+    attendance.record(
+        {
+            "start": "2026-10-27T08:00:00+09:00",
+            "end": "2026-10-27T09:02:00+09:00",
+            "reason": "가상 시계 오차 정정",
+        }
+    )
+    with pytest.raises(DomainError):
+        attendance.event("start")
