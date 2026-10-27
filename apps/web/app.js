@@ -120,7 +120,7 @@ async function api(path, body) {
     error: '로컬 서버 응답을 확인해주세요.'
   }));
   if (!response.ok) {
-    if (response.status === 423) {
+    if (response.status === 423 || response.status === 401) {
       connection.locked = true;
       data = null;
       clearPrivateView();
@@ -220,7 +220,7 @@ function header(kicker, title, description, extra = '') {
 function navMarkup() {
   return navItems.map(([id, title, glyph], index) =>
     `<button class="nav-item ${state.page===id?'active':''}" data-nav="${id}" ${state.page===id?'aria-current="page"':''}>${icon(glyph)}<span>${title}</span><span class="nav-index">${String(index+1).padStart(2,'0')}</span></button>`
-    ).join('');
+  ).join('');
 }
 
 function commandBox() {
@@ -239,7 +239,7 @@ function weeklyCard() {
 function alertList() {
   return data.alerts.length ? data.alerts.map(alert =>
     `<button class="notice-item notice-button" data-action="navigate-target" data-id="${esc(alert.target)}"><span class="notice-dot amber"></span><div><strong>${esc(alert.title)}</strong><p>${esc(alert.detail)}</p></div>${icon('chevron')}</button>`
-    ).join('') : empty('현재 확인할 항목이 없습니다.');
+  ).join('') : empty('현재 확인할 항목이 없습니다.');
 }
 
 function homeView() {
@@ -251,7 +251,8 @@ function homeView() {
 
 function tasksView() {
   const tasks = data.tasks.filter(task => state.taskTab === 'all' ? task.status !== 'archived' :
-    state.taskTab === 'archived' ? task.status === 'archived' : state.taskTab === 'done' ? task.status === 'done' : !['done', 'archived'].includes(task
+    state.taskTab === 'archived' ? task.status === 'archived' : state.taskTab === 'done' ? task
+    .status === 'done' : !['done', 'archived'].includes(task
       .status));
   return `${header('TASKS & PLANS','업무와 소요시간','완료 여부와 실제 소요시간을 각각 기록합니다.')}<div class="toolbar"><div class="tabs">${[['all','전체'],['todo','진행'],['done','완료'],['archived','보관']].map(([id,label])=>`<button data-task-tab="${id}" class="${state.taskTab===id?'active':''}">${label}</button>`).join('')}</div>${button('new-task','＋ 업무 추가','','button-primary')}</div><section class="card wide-card">${tasks.length?tasks.map(taskRow).join(''):empty('업무를 추가해 오늘의 계획을 세워보세요.')}</section><section class="card wide-card"><div class="card-heading"><h2>오늘 입력한 업무 기록</h2><span>${duration(data.logs.reduce((sum,row)=>sum+row.minutes,0))}</span></div>${data.logs.length?data.logs.map(log=>`<div class="timeline-item"><span>${log.minutes}분</span><div><strong>${esc(log.title)}</strong><small>${esc(log.note)}</small></div>${button('edit-log','정정',log.id)}</div>`).join(''):empty('업무별 시간 기록이 아직 없습니다.')}</section>${commandBox()}`;
 }
@@ -380,7 +381,7 @@ function showOrder(id) {
   const order = data.orders.find(o => o.id === id);
   showDialog('구매 상세',
     `<p><strong>${esc(order.supplier)}</strong> · ${esc(order.order_number)} · ${money(order.amount)}</p><form data-form="order-update" data-id="${esc(id)}">${field('도착 예정일','eta',order.eta,'date')}${area('사용 목적 · 메모','memo',order.memo)}${!order.lines.some(l=>l.received)?select('처리 상태','status',[['ordered','주문'],['shipping','배송 중'],['cancelled','취소']],order.status):''}<button class="button button-primary" type="submit">배송·메모 저장</button></form><h3>분할 수령</h3>${order.lines.map(line=>`<div class="receipt-line"><strong>${esc(line.name)}</strong><p>주문 ${line.quantity} / 수령 ${line.received} · 포장당 ${line.units_per_pack}${line.item_id?'개 입고':' · 재고 연결 없음'}</p>${order.status!=='cancelled'&&line.received<line.quantity?`<form data-form="receive" data-id="${esc(id)}" data-line="${esc(line.id)}">${field('이번에 받은 포장 수량','quantity',line.quantity-line.received,'number',`min="1" max="${line.quantity-line.received}" step="1" required`)}<button class="button button-primary" type="submit">수령·입고</button></form>`:''}</div>`).join('')}<h3>구매 증빙</h3>${[['statement','거래명세서','statement_ref'],['card-receipt','카드매출전표','receipt_ref']].map(([kind,title,key])=>`<label class="entry-field">${title}${order[key]?`<a href="/api/documents/${esc(order[key])}">저장된 파일 다운로드</a>`:'수집 대기'}<input type="file" accept="application/pdf,image/png,image/jpeg" data-upload="${kind}" data-order="${esc(id)}"></label>`).join('')}<p class="subtle-label">PDF·PNG·JPEG, 파일당 5MB 이하 · 암호화 저장</p><p class="form-error" role="alert"></p>${button('close','닫기')}`
-    );
+  );
 }
 
 function showTime(id = '') {
@@ -463,13 +464,13 @@ async function act(action, id) {
     render();
     showDialog('출근을 기록했습니다.',
       `<p>오늘 먼저 챙길 일 ${result.tasks.length}건</p>${result.tasks.map(task=>`<div class="flow-item">${icon('tasks')}<div><strong>${esc(task.title)}</strong><p>${esc(task.priority)} · ${esc(task.detail)}</p></div></div>`).join('')||empty('예정된 미완료 업무가 없습니다.')}<h3>확인할 항목</h3>${alertList()}${button('close','확인')}`
-      );
+    );
     return;
   }
   if (action === 'finish') {
     showDialog('퇴근 전 확인',
       `<p>오늘 근무 ${duration(data.attendance.today_minutes)} · 주간 ${duration(data.attendance.week_minutes)}</p>${alertList()}<p>퇴근 시 실제 기록으로 일일 업무보고 초안을 생성합니다.</p>${button('confirm-finish','퇴근 기록·보고서 생성','','button-primary')}${button('close','돌아가기')}`
-      );
+    );
     return;
   }
   if (action === 'confirm-finish') {
@@ -583,7 +584,12 @@ async function act(action, id) {
     return;
   }
   if (action === 'payroll') {
-    const row=data.payroll.find(row=>row.month===(id||data.today.slice(0,7)))||{month:data.today.slice(0,7),expected_net:0,received_net:null,note:''};
+    const row = data.payroll.find(row => row.month === (id || data.today.slice(0, 7))) || {
+      month: data.today.slice(0, 7),
+      expected_net: 0,
+      received_net: null,
+      note: ''
+    };
     showDialog('급여 입금 대조',
       `${field('대상 월','month',row.month,'month','required')}${field('예상 실수령액 (원)','expected_net',row.expected_net,'number','required min="0" step="1"')}${field('실제 입금액 · 미확인은 공란','received_net',row.received_net??'','number','min="0" step="1"')}${area('대조 메모','note',row.note)}`,
       'payroll');
@@ -852,7 +858,7 @@ document.addEventListener('change', async event => {
   if (input.name === 'item_id' && input.closest('.purchase-line')) {
     const item = data.items.find(i => i.id === input.value);
     if (item) input.closest('.purchase-line').querySelector('[name="name"]').value = item
-    .name;
+      .name;
     return;
   }
   if (input.name === 'saved-report') {
@@ -923,7 +929,9 @@ async function boot() {
     const access = new URLSearchParams(location.hash.slice(1)).get('access');
     if (access) {
       history.replaceState(null, '', '#home');
-      await api('session', {token:access});
+      await api('session', {
+        token: access
+      });
     }
     await refresh();
   } catch (error) {
@@ -932,17 +940,40 @@ async function boot() {
   }
 }
 if (navItems.some(row => row[0] === location.hash.slice(1))) state.page = location.hash.slice(1);
-setInterval(async () => {
-  if (document.hidden || state.busy || document.getElementById('flow-dialog').open) return;
+async function poll() {
+  if (state.busy) return;
   try {
-    const previous=new Set((data?.alerts||[]).map(row=>`${row.target}:${row.id||''}:${row.title}`));
+    if (document.hidden || document.getElementById('flow-dialog').open) {
+      const status = await api('status');
+      connection = {
+        ...connection,
+        ...status
+      };
+      if (status.locked) {
+        data = null;
+        clearPrivateView();
+        render();
+      }
+      return;
+    }
+    const previous = new Set((data?.alerts || []).map(row =>
+      `${row.target}:${row.id||''}:${row.title}`));
     await refresh(false);
-    const arrived=(data?.alerts||[]).filter(row=>!previous.has(`${row.target}:${row.id||''}:${row.title}`));
-    if(arrived.length&&data.settings.notifications)toast(`새 확인 항목 ${arrived.length}건이 있습니다.`);
+    if (connection.locked) {
+      render();
+      return;
+    }
+    const arrived = (data?.alerts || []).filter(row => !previous.has(
+      `${row.target}:${row.id||''}:${row.title}`));
+    if (arrived.length && data.settings.notifications) toast(`새 확인 항목 ${arrived.length}건이 있습니다.`);
     if (!(state.page === 'records' && state.recordTab === 'report') && !document
       .querySelector('form:focus-within')) render();
   } catch (error) {
     if (connection.locked) render();
   }
-}, 60000);
+}
+setInterval(poll, 60000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) poll();
+});
 boot();
