@@ -24,3 +24,18 @@ def test_tasks_logs_and_input_validation(store: EncryptedStore) -> None:
                 "status": "done",
             }
         )
+
+
+def test_daily_task_minutes_limit(store: EncryptedStore) -> None:
+    tasks = Tasks(store)
+    task = tasks.save({"title": "가상 장시간 업무"})
+    data = {
+        "task_id": task["id"],
+        "date": "2026-10-27",
+        "minutes": 1440,
+        "status": "in_progress",
+    }
+    tasks.log(data)
+    with pytest.raises(DomainError):
+        tasks.log({**data, "minutes": 1})
+    assert len(tasks.daily("2026-10-27")) == 1

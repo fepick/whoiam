@@ -59,6 +59,19 @@ class Tasks:
         task = self.tasks.get(text(data, "task_id", 64))
         when = day(text(data, "date", 10)).isoformat()
         minutes = integer(data, "minutes", 0, 1440)
+        if (
+            sum(
+                entry["minutes"]
+                for entry in self.daily(when)
+                if entry["task_id"] == task["id"]
+            )
+            + minutes
+            > 1440
+        ):
+            raise DomainError(
+                "같은 업무의 하루 소요시간 합계는 1440분 이하여야 합니다."
+            )
+        note = text(data, "note", 240, False)
         status = choice(data, "status", ("in_progress", "done"))
         task["status"] = status
         task["updated_at"] = utcnow().isoformat()
@@ -70,7 +83,7 @@ class Tasks:
                 "title": task["title"],
                 "date": when,
                 "minutes": minutes,
-                "note": text(data, "note", 240, False),
+                "note": note,
                 "status": status,
             }
         )
@@ -98,5 +111,17 @@ class Tasks:
         fields(data, {"id", "minutes", "note"})
         entry = self.logs.get(text(data, "id", 64))
         entry["minutes"] = integer(data, "minutes", 0, 1440)
+        if (
+            sum(
+                row["minutes"]
+                for row in self.daily(entry["date"])
+                if row["task_id"] == entry["task_id"] and row["id"] != entry["id"]
+            )
+            + entry["minutes"]
+            > 1440
+        ):
+            raise DomainError(
+                "같은 업무의 하루 소요시간 합계는 1440분 이하여야 합니다."
+            )
         entry["note"] = text(data, "note", 240, False)
         return self.logs.put(entry)
