@@ -44,6 +44,15 @@ class Attendance:
         if action == "start":
             if active:
                 raise DomainError("이미 근무 중입니다. 기존 기록을 확인해주세요.", 409)
+            if any(
+                moment(session["end"]) > moment(now)
+                for session in self.sessions.all()
+                if session["end"]
+            ):
+                raise DomainError(
+                    "앞선 근무 기록과 겹칩니다. 시스템 시각과 정정 기록을 확인해주세요.",
+                    409,
+                )
             return self.sessions.put(
                 {
                     "id": uid(),
