@@ -20,6 +20,7 @@ from packages.platform.domain import (
     Json,
     fields,
     integer,
+    moment,
     text,
     utcnow,
 )
@@ -129,6 +130,22 @@ class Core:
                     "id": task["id"],
                 }
             )
+        logged = {entry["task_id"] for entry in self.tasks.daily(self.today())}
+        for task in self.tasks.list():
+            if (
+                task["status"] == "done"
+                and task["id"] not in logged
+                and moment(task["updated_at"]).astimezone(SEOUL).date().isoformat()
+                == self.today()
+            ):
+                alerts.append(
+                    {
+                        "title": "완료 업무의 소요시간을 확인해주세요.",
+                        "detail": task["title"],
+                        "target": "tasks",
+                        "id": task["id"],
+                    }
+                )
         return alerts
 
     def snapshot(self) -> Json:
@@ -188,6 +205,7 @@ class Core:
             "purchasing.create": self.purchasing.create,
             "purchasing.update": self.purchasing.update,
             "purchasing.receive": self.purchasing.receive,
+            "purchasing.document": self.attach_document,
             "attendance.record": self.attendance.record,
             "attendance.payroll": self.attendance.save_payroll,
             "sensitive.save": self.sensitive.save,
@@ -206,6 +224,23 @@ class Core:
         if name not in handlers:
             raise DomainError("지원하지 않는 명령입니다.", 404)
         return handlers[name](data)
+
+    def attach_document(self, data: Json) -> Json:
+        fields(data, {"order_id", "name", "kind", "content"})
+        kind = text(data, "kind", 32)
+        if kind not in ("statement", "card-receipt"):
+            raise DomainError("구매 증빙 유형을 확인해주세요.")
+        document = self.sensitive.upload(
+            {key: data.get(key) for key in ("name", "kind", "content")}
+        )
+        return self.purchasing.update(
+            {
+                "id": text(data, "order_id", 64),
+                "statement_ref" if kind == "statement" else "receipt_ref": document[
+                    "id"
+                ],
+            }
+        )
 
     def generate(self, data: Json) -> Json:
         fields(data, {"date"})
@@ -248,10 +283,12 @@ class Core:
             ).encode()
         ).hexdigest()
         with self.store.transaction():
-            previous = next(
-                (entry for entry in self.commands.all() if entry["id"] == request_id),
-                None,
-            )
+            try:
+                previous = self.commands.get(request_id)
+            except DomainError as error:
+                if error.status != 404:
+                    raise
+                previous = None
             if previous:
                 if previous["fingerprint"] != fingerprint:
                     raise DomainError(
