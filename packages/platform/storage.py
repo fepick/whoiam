@@ -25,10 +25,18 @@ class EncryptedStore:
         self.connection: sqlite3.Connection | None = None
         self.depth = 0
         self.touched = 0.0
+        self.revision = 0
+        self.dirty = False
+        self.before_lock: Callable[[], None] | None = None
+        self.locking = False
 
     @property
     def locked(self) -> bool:
-        if self.cipher and time.monotonic() - self.touched > IDLE_SECONDS:
+        if (
+            self.cipher
+            and not self.locking
+            and time.monotonic() - self.touched > IDLE_SECONDS
+        ):
             self.lock()
         return self.cipher is None
 
@@ -68,7 +76,15 @@ class EncryptedStore:
 
     def lock(self) -> None:
         with self.mutex:
-            self.cipher = None
+            if self.locking:
+                return
+            self.locking = True
+            try:
+                if self.cipher and self.before_lock:
+                    self.before_lock()
+            finally:
+                self.cipher = None
+                self.locking = False
 
     def close(self) -> None:
         with self.mutex:
@@ -89,11 +105,14 @@ class EncryptedStore:
             outer = self.depth == 0
             if outer:
                 self.connection.execute("BEGIN IMMEDIATE")
+                self.dirty = False
             self.depth += 1
             try:
                 yield
                 if outer:
                     self.connection.commit()
+                    if self.dirty:
+                        self.revision += 1
             except BaseException:
                 if outer:
                     self.connection.rollback()
@@ -103,6 +122,23 @@ class EncryptedStore:
 
     def scope(self, module: str) -> "Repository":
         return Repository(self, module)
+
+    def snapshot(self, destination: Path) -> None:
+        with self.mutex:
+            touched = self.touched
+            self.require_unlocked()
+            try:
+                if self.depth:
+                    raise DomainError("작업 처리 중에는 백업할 수 없습니다.", 409)
+                if destination.exists():
+                    raise DomainError("기존 파일에 백업을 덮어쓰지 않습니다.", 409)
+                connection = sqlite3.connect(destination)
+                try:
+                    self.connection.backup(connection)
+                finally:
+                    connection.close()
+            finally:
+                self.touched = touched
 
 
 class Repository:
@@ -152,6 +188,7 @@ class Repository:
                 "ON CONFLICT(module, id) DO UPDATE SET payload=excluded.payload",
                 (self.module, data["id"], payload),
             )
+            self.store.dirty = True
             return data
 
     def delete(self, identifier: str) -> None:
@@ -160,3 +197,4 @@ class Repository:
             self.store.connection.execute(
                 "DELETE FROM records WHERE module=? AND id=?", (self.module, identifier)
             )
+            self.store.dirty = True
