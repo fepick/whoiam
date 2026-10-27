@@ -56,3 +56,29 @@ def test_failed_command_has_no_partial_task_update(store: EncryptedStore) -> Non
             str(uuid4()),
         )
     assert core.tasks.tasks.get(task["id"])["status"] == "todo"
+
+
+def test_large_report_preserves_source_and_does_not_block_checkout(
+    store: EncryptedStore,
+) -> None:
+    core = Core(store)
+    task = core.tasks.save({"title": "가상 장시간 검증"})
+    for _ in range(10):
+        core.tasks.log(
+            {
+                "task_id": task["id"],
+                "date": core.today(),
+                "minutes": 1,
+                "note": "가" * 240,
+                "status": "in_progress",
+            }
+        )
+    for index in range(101):
+        core.tasks.save({"title": f"가상 예정 {index}"})
+    core.execute("core.start", {}, str(uuid4()))
+    report = core.execute("core.finish", {}, str(uuid4()))["report"]
+    assert len(report["planned"]) == 100
+    assert "102" in report["note"]
+    assert len(report["daily"][0]["detail"]) <= 2000
+    assert sum(len(entry["note"]) for entry in core.tasks.daily(core.today())) == 2400
+    assert core.attendance.active() is None
