@@ -164,6 +164,7 @@ class Core:
                     limit=self.settings()["weekly_limit"]
                 ),
                 "sessions": self.attendance.list(),
+                "attendance_history": self.attendance.history(),
                 "payroll": self.attendance.payroll_list(),
                 "reports": self.reporting.list(),
                 "vault": self.sensitive.list(),

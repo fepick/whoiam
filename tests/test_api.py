@@ -88,3 +88,33 @@ def test_manual_attendance_reports_future_end_and_accepts_past_hours(
         session = accepted.json()["result"]
         assert session["start"] == "2026-10-27T00:00:00+00:00"
         assert session["end"] == "2026-10-27T02:00:00+00:00"
+
+
+def test_manual_attendance_api_takes_priority_and_preserves_history(
+    store: EncryptedStore,
+) -> None:
+    app = create_app(store, demo=True)
+    app.state.core.attendance.clock = lambda: moment("2026-10-27T20:00:00+09:00")
+    with TestClient(app, base_url="http://127.0.0.1:4173") as client:
+        client.get("/")
+        csrf = client.get("/api/status").json()["csrf"]
+        headers = {"origin": "http://127.0.0.1:4173", "x-whoiam-csrf": csrf}
+        record = {
+            "start": "2026-10-27T09:00:00+09:00",
+            "end": "2026-10-27T18:00:00+09:00",
+            "reason": "가상 기록",
+        }
+        for start in ("09:00", "10:00"):
+            body = {
+                "name": "attendance.record",
+                "data": {**record, "start": f"2026-10-27T{start}:00+09:00"},
+                "request_id": str(uuid4()),
+            }
+            assert (
+                client.post("/api/commands", json=body, headers=headers).status_code
+                == 200
+            )
+        snapshot = client.get("/api/snapshot").json()
+        assert len(snapshot["sessions"]) == 1
+        assert len(snapshot["attendance_history"]) == 1
+        assert snapshot["sessions"][0]["start"] == "2026-10-27T01:00:00+00:00"
