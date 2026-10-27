@@ -20,6 +20,7 @@ SECURE_BACKENDS = {
 
 
 def os_key(path: Path) -> bytes:
+    """v0.02 저장소 이전 전용. 새 저장소는 vault.VaultKeys를 사용한다."""
     backend = keyring.get_keyring()
     if type(backend).__module__ not in SECURE_BACKENDS:
         raise DomainError("지원하는 OS 보안 키 저장소가 필요합니다.", 503)
