@@ -23,6 +23,8 @@ pwsh -NoProfile -File scripts/Start-TacticRemote.ps1
 실행 스크립트는 공식 Windows 독립 설치본의 `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin\codex.exe`를 우선한다.
 없으면 PATH의 `codex.exe`, 설치된 VS Code Codex 확장 순서로 찾는다.
 프로젝트 `.venv/Scripts`가 있으면 companion의 실행 환경에 추가한다.
+Claude Code가 `%USERPROFILE%\.local\bin\claude.exe`에 설치되어 있으면 이 경로도 추가한다.
+CLI 설치 전부터 켜져 있던 IDE에서도 새 경로를 사용할 수 있도록 현재 등록된 사용자 PATH를 읽어 실행 환경에 반영한다.
 Codex 런타임에 포함된 PowerShell이 있고 `pwsh` 명령이 없으면 그 경로도 추가한다.
 전역 PATH·로그인 정보·방화벽·자동 시작 설정은 수정하지 않는다.
 이 설명은 저장소의 실행 스크립트에 해당한다. 공식 Codex CLI 설치 프로그램은 사용자 PATH에 CLI 경로를 등록한다.
@@ -74,6 +76,21 @@ Relay 연결 성공과 Codex 실행 파일 검색은 별개다.
 ```
 
 이후 로그인 요청이 표시되면 PC에서 직접 로그인한다. 로그인 파일을 복사하거나 토큰을 원격 대화에 붙이지 않는다.
+
+## Claude Code CLI를 함께 사용하기
+
+[Claude Code 공식 Windows 설치 안내](https://code.claude.com/docs/en/setup#install-on-native-windows)에 따라
+네이티브 CLI를 설치하고 `%USERPROFILE%\.local\bin`을 사용자 PATH에 등록한다.
+설치와 로그인은 별개이며 에이전트 사용 전 PC에서 직접 로그인해야 한다.
+
+```powershell
+where.exe claude
+claude --version
+```
+
+Tactic Remote의 서버 진단은 여러 도구를 한 번에 검사한다. Claude·Codex 중 사용할 에이전트가 검색되는지 확인한다.
+Amp는 해당 에이전트를 사용할 때, Cloudflare는 해당 터널 방식을 사용할 때만 필요하다.
+PATH를 바꾼 뒤에는 Tactic Remote를 트레이의 종료 기능까지 사용해 완전히 종료하고 재실행한 다음 서버 진단을 다시 실행한다.
 
 ## 프로젝트 데이터 경계
 

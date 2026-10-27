@@ -50,6 +50,10 @@ if (-not $CodexExecutable -or -not (Test-Path -LiteralPath $CodexExecutable -Pat
 $tacticPath = (Resolve-Path -LiteralPath $TacticExecutable).Path
 $codexPath = (Resolve-Path -LiteralPath $CodexExecutable).Path
 $toolDirectories = @((Split-Path -Parent $codexPath))
+$claudeBin = Join-Path $env:USERPROFILE '.local/bin'
+if (Test-Path -LiteralPath (Join-Path $claudeBin 'claude.exe') -PathType Leaf) {
+    $toolDirectories += $claudeBin
+}
 $pythonTools = Join-Path $repositoryRoot '.venv/Scripts'
 if (Test-Path -LiteralPath $pythonTools -PathType Container) { $toolDirectories += $pythonTools }
 $bundledPowerShell = Join-Path $env:USERPROFILE '.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell'
@@ -71,7 +75,9 @@ if ($Preview) {
 $previousPath = $env:PATH
 $previousPreCommitHome = $env:PRE_COMMIT_HOME
 try {
-    $env:PATH = ($toolDirectories -join ';') + ';' + $previousPath
+    # CLI 설치 뒤에도 IDE에 남아 있는 이전 PATH를 현재 사용자 등록값으로 보완한다.
+    $registeredUserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $env:PATH = ($toolDirectories -join ';') + ';' + $registeredUserPath + ';' + $previousPath
     if (-not $previousPreCommitHome) {
         $env:PRE_COMMIT_HOME = Join-Path $repositoryRoot '.tmp/pre-commit-cache'
     }
