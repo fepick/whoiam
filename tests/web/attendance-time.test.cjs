@@ -39,13 +39,15 @@ test('오전·오후·정오·자정 시각을 24시간제 한국 시간으로 �
 
 test('수동 입력에 실제 근무 안내와 24시간제 확인란을 표시한다', () => {
   const {context, element} = application();
-  vm.runInContext('data = {sessions: []}; showTime();', context);
+  vm.runInContext('data = {sessions: [], today:"2026-10-27"}; showTime();', context);
   const html = element('dialog-content').innerHTML;
   assert.match(html, /name="session_start"/);
   assert.match(html, /name="session_end"/);
   assert.match(html, /퇴근 예정 시각은 저장할 수 없습니다/);
   assert.match(html, /24시간제/);
   assert.match(html, /수동 입력이 우선/);
+  assert.match(html, /value="2026-10-27T12:00"/);
+  assert.match(html, /value="2026-10-27T13:00"/);
   const summary = vm.runInContext("manualTimeSummary('2026-10-27T09:00', '2026-10-27T18:00')", context);
   assert.match(summary, /09:00.*18:00/);
 });
@@ -72,4 +74,26 @@ test('보관된 근무 이력을 새로운 수동 입력으로 불러온다', ()
   vm.runInContext("showTime('',data.attendance_history[0]);", context);
   assert.match(element('dialog-content').innerHTML, /data-form="time" data-id=""/);
   assert.match(element('dialog-content').innerHTML, /value="2026-10-27T09:00"/);
+  assert.doesNotMatch(element('dialog-content').innerHTML, /data-default-lunch/);
+});
+
+test('기본 점심 휴게 날짜를 출근 날짜에 맞추고 직접 수정한 휴게는 보존한다', () => {
+  const {context} = application();
+  const start = {value:'2026-10-26T09:00'};
+  const end = {value:''};
+  const breakStart = {value:'2026-10-27T12:00'};
+  const breakEnd = {value:'2026-10-27T13:00'};
+  const line = {dataset:{defaultLunch:'true'}, querySelector:selector=>selector==='[name="start"]'?breakStart:breakEnd};
+  context.form = {
+    elements:{namedItem:name=>name==='session_start'?start:end},
+    querySelectorAll:()=>line.dataset.defaultLunch==='true'?[line]:[],
+  };
+  vm.runInContext('syncDefaultLunch(form)', context);
+  assert.equal(breakStart.value,'2026-10-26T12:00');
+  assert.equal(breakEnd.value,'2026-10-26T13:00');
+  delete line.dataset.defaultLunch;
+  breakStart.value='2026-10-26T12:15';
+  start.value='2026-10-25T09:00';
+  vm.runInContext('syncDefaultLunch(form)', context);
+  assert.equal(breakStart.value,'2026-10-26T12:15');
 });
