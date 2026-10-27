@@ -37,8 +37,9 @@ def test_correction_overlap_and_limit(store: EncryptedStore) -> None:
         "reason": "가상 정정",
     }
     attendance.record(record)
-    with pytest.raises(DomainError, match="겹칩니다"):
-        attendance.record(record)
+    attendance.record(record)
+    assert len(attendance.list()) == 1
+    assert len(attendance.history()) == 1
     assert attendance.summary(limit=480)["over_limit"]
 
 

@@ -28,15 +28,54 @@ class Attendance:
         self, store: EncryptedStore, clock: Callable[[], datetime] = utcnow
     ) -> None:
         self.store = store
+        self.store = store
         self.clock = clock
         self.sessions = store.scope("attendance.sessions")
         self.payroll = store.scope("attendance.payroll")
 
     def list(self) -> list[Json]:
-        return list(reversed(self.sessions.all()))
+        return list(
+            reversed(
+                [
+                    session
+                    for session in self.sessions.all()
+                    if not session.get("superseded_by")
+                ]
+            )
+        )
 
     def active(self) -> Json | None:
-        return next((row for row in self.sessions.all() if row["end"] is None), None)
+        return next((row for row in self.list() if row["end"] is None), None)
+
+    def history(self) -> list[Json]:
+        versions = []
+        for session in self.sessions.all():
+            if session.get("superseded_by"):
+                versions.append(
+                    {
+                        "id": f"replaced:{session['id']}",
+                        "original_id": session["id"],
+                        "start": session["start"],
+                        "end": session["end"],
+                        "breaks": session["breaks"],
+                        "at": session["superseded_at"],
+                        "reason": session["superseded_reason"],
+                        "kind": "replaced",
+                    }
+                )
+            for index, correction in enumerate(session.get("corrections", [])):
+                if correction.get("previous"):
+                    versions.append(
+                        {
+                            "id": f"corrected:{session['id']}:{index}",
+                            "original_id": session["id"],
+                            **correction["previous"],
+                            "at": correction["at"],
+                            "reason": correction["reason"],
+                            "kind": "corrected",
+                        }
+                    )
+        return sorted(versions, key=lambda version: version["at"], reverse=True)
 
     def event(self, action: str) -> Json:
         now = self.clock().isoformat()
@@ -46,7 +85,7 @@ class Attendance:
                 raise DomainError("이미 근무 중입니다. 기존 기록을 확인해주세요.", 409)
             if any(
                 moment(session["end"]) > moment(now)
-                for session in self.sessions.all()
+                for session in self.list()
                 if session["end"]
             ):
                 raise DomainError(
@@ -60,6 +99,7 @@ class Attendance:
                     "end": None,
                     "breaks": [],
                     "corrections": [],
+                    "source": "clock",
                 }
             )
         if active is None:
@@ -84,6 +124,10 @@ class Attendance:
         return self.sessions.put(active)
 
     def record(self, data: Json) -> Json:
+        with self.store.transaction():
+            return self._record_manual(data)
+
+    def _record_manual(self, data: Json) -> Json:
         fields(data, {"id", "start", "end", "breaks", "reason"})
         start, end = moment(text(data, "start", 40)), moment(text(data, "end", 40))
         if end <= start:
@@ -119,20 +163,22 @@ class Attendance:
             normalized.append(
                 {"start": break_start.isoformat(), "end": break_end.isoformat()}
             )
+        now = self.clock()
         old = None
-        for session in self.sessions.all():
+        overlaps = []
+        for session in self.list():
             if session["id"] == identifier:
                 old = session
                 continue
-            other_end = moment(session["end"]) if session["end"] else self.clock()
+            other_end = moment(session["end"]) if session["end"] else now
             if start < other_end and end > moment(session["start"]):
-                raise DomainError("다른 근무 기록과 시간이 겹칩니다.", 409)
+                overlaps.append(session)
         if data.get("id") and old is None:
             raise DomainError("정정할 근무 기록을 찾을 수 없습니다.", 404)
-        corrections = old["corrections"] if old else []
+        corrections = old.get("corrections", []) if old else []
         corrections.append(
             {
-                "at": self.clock().isoformat(),
+                "at": now.isoformat(),
                 "reason": reason,
                 "previous": (
                     {key: old[key] for key in ("start", "end", "breaks")}
@@ -141,6 +187,15 @@ class Attendance:
                 ),
             }
         )
+        for session in overlaps:
+            self.sessions.put(
+                {
+                    **session,
+                    "superseded_by": identifier,
+                    "superseded_at": now.isoformat(),
+                    "superseded_reason": reason,
+                }
+            )
         return self.sessions.put(
             {
                 "id": identifier,
@@ -148,6 +203,13 @@ class Attendance:
                 "end": end.isoformat(),
                 "breaks": normalized,
                 "corrections": corrections,
+                "source": "manual",
+                "replaces": list(
+                    dict.fromkeys(
+                        (old.get("replaces", []) if old else [])
+                        + [session["id"] for session in overlaps]
+                    )
+                ),
             }
         )
 
@@ -171,7 +233,7 @@ class Attendance:
         today = when or self.clock().astimezone(SEOUL).date()
         monday = today - timedelta(days=today.weekday())
         beginning = datetime.combine(monday, time.min, SEOUL)
-        sessions = self.sessions.all()
+        sessions = self.list()
         daily = []
         for offset in range(7):
             start = beginning + timedelta(days=offset)
