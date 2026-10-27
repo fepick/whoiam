@@ -17,9 +17,16 @@ if (-not (Test-Path -LiteralPath $TacticExecutable -PathType Leaf)) {
 }
 
 if (-not $CodexExecutable) {
-    $codexCommand = Get-Command codex.exe -ErrorAction SilentlyContinue
-    if ($codexCommand) { $CodexExecutable = $codexCommand.Source }
+    # IDE가 추가한 임시 PATH보다 독립 설치본의 고정 진입 경로를 우선한다.
+    $standaloneCodex = Join-Path $env:LOCALAPPDATA 'Programs/OpenAI/Codex/bin/codex.exe'
+    if (Test-Path -LiteralPath $standaloneCodex -PathType Leaf) {
+        $CodexExecutable = $standaloneCodex
+    }
     else {
+        $codexCommand = Get-Command codex.exe -ErrorAction SilentlyContinue
+        if ($codexCommand) { $CodexExecutable = $codexCommand.Source }
+    }
+    if (-not $CodexExecutable) {
         # VS Code 확장 버전이 바뀌어도 실행 파일을 다시 찾는다. 인증 파일은 열지 않는다.
         $extensionRoot = Join-Path $env:USERPROFILE '.vscode/extensions'
         if (Test-Path -LiteralPath $extensionRoot -PathType Container) {
@@ -55,6 +62,7 @@ if ($Preview) {
     Write-Output "Tactic Remote: $tacticPath"
     Write-Output "Codex: $codexPath"
     Write-Output "Select this project in Tactic Remote: $repositoryRoot"
+    Write-Output 'If the companion is already running, fully quit it before launching with this environment.'
     Write-Output 'Preview only. No app, account, network, or persistent environment settings were changed.'
     return
 }
