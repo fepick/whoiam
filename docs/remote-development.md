@@ -37,10 +37,16 @@ pwsh -NoProfile -File scripts/Start-TacticRemote.ps1 -TacticExecutable 'C:\Tools
 
 1. PC 앱의 Account 화면에서 Tactic 계정으로 로그인하고 `Bind this PC`를 선택한다.
 2. 외부 접속용 `Tactic Relay`를 켜고 연결 상태를 확인한다.
-3. iPhone·iPad에서 같은 Tactic 계정으로 로그인한다.
-4. `Your Computers`에서 이 PC를 선택한다.
-5. 프로젝트 폴더를 선택하고 에이전트를 Codex로 지정한다.
-6. 첫 요청은 `AGENTS.md만 읽고 프로젝트 개발 규칙을 요약해 줘. 파일은 수정하지 마.`로 연결을 확인한다.
+3. PC 앱의 설정에서 `Allowed Base Path` 옆 `Browse`로 이 checkout 폴더를 선택하고 저장한다.
+   예를 들어 checkout이 `C:\code\whoiam`이면 이 경로를 지정한다. 허용 범위를 드라이브 전체로 넓히지 않는다.
+4. iPhone·iPad에서 같은 Tactic 계정으로 로그인한다.
+5. `Your Computers`에서 이 PC를 선택한다.
+6. 프로젝트 폴더를 선택하고 에이전트를 Codex로 지정한다.
+7. 첫 요청은 `AGENTS.md만 읽고 프로젝트 개발 규칙을 요약해 줘. 파일은 수정하지 마.`로 연결을 확인한다.
+
+연결은 되지만 휴대폰의 폴더 목록에서 checkout이 보이지 않으면 PC의 `Allowed Base Path`를 확인한다.
+이 설정은 앱 실행 시의 작업 디렉터리와 별개다. 실행 스크립트는 허용 경로 설정을 변경하지 않는다.
+저장 후 휴대폰에서 연결을 다시 열고 폴더 목록을 새로고침한다. 앱이 재시작을 요구하면 companion을 재시작한다.
 
 Tactic 계정 로그인과 Codex 로그인은 별개다. PC companion이 실행 중이어야 하며,
 PC가 절전 중이거나 꺼져 있으면 연결할 수 없다.
