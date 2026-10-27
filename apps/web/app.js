@@ -293,7 +293,73 @@ function recordsView() {
 }
 
 function settingsView() {
-  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div><section class="card wide-card"><div class="card-heading"><h2>보관함 목록</h2><span class="subtle-label">원문 조회는 제공하지 않습니다</span></div>${data.vault.map(entry=>`<div class="timeline-item"><div><strong>${esc(entry.alias)}</strong><small>${esc(entry.kind)} · ${esc(entry.hint)}</small></div>${button('delete-secret','삭제',entry.id)}</div>`).join('')||empty('저장된 민감정보가 없습니다.')}</section>`;
+  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div><section class="card wide-card"><div class="card-heading"><h2>보관함 목록</h2><span class="subtle-label">원문 조회는 제공하지 않습니다</span></div>${data.vault.map(entry=>`<div class="timeline-item"><div><strong>${esc(entry.alias)}</strong><small>${esc(entry.kind)} · ${esc(entry.hint)}</small></div>${button('delete-secret','삭제',entry.id)}</div>`).join('')||empty('저장된 민감정보가 없습니다.')}</section>${personalSettings()}`;
+}
+
+function personalSettings() {
+  const backup = connection.backup || {};
+  const profileLabel = {
+    production: '운영',
+    development: '개발',
+    test: '테스트',
+    demo: '임시 데모'
+  } [connection.profile] || '로컬';
+  return `<section class="card wide-card"><div class="card-heading"><h2>개인 실사용 관리</h2><span class="tag">${profileLabel} 프로필</span></div><p class="subtle-label">${connection.demo?'임시 데모에서는 운영 파일과 키를 사용하지 않습니다.':'운영 데이터와 OS 키는 실행 프로필별로 분리됩니다.'}</p><div class="setting-row"><div><strong>암호화 백업</strong><p>${backup.error?'최근 백업에 실패했습니다. 저장 공간과 폴더 권한을 확인해주세요.':backup.last_created?`최근 백업 ${esc(localTime(backup.last_created))}`:'저장소를 해제하면 최초 백업을 만듭니다.'}</p></div><span>변경 후 최대 약 5분</span></div><p class="subtle-label">잠금·종료 전 변경분도 백업합니다. 최근 자동 백업 30개를 보관하며 수동·복원 전 백업은 자동 삭제하지 않습니다.</p><div class="row-actions">${backup.available?button('backup-now','지금 백업')+button('backup-list','백업·복원'):''}${!connection.demo&&['production','development'].includes(connection.profile)?button('startup-settings','로그인 자동 실행'):''}${button('shutdown','앱 종료')}</div><p class="subtle-label" style="margin-top:16px">다른 PC에서 복구하려면 별도 복구 파일과 복구 암호도 필요합니다. 복구 파일은 앱을 종료한 뒤 관리 CLI로 생성합니다.</p></section>`;
+}
+let backupRevision = 0;
+async function personalAction(action, id) {
+  if (action === 'backup-now') {
+    await api('backups', {});
+    await refresh();
+    toast('암호화 백업을 만들고 검증했습니다.');
+    return true;
+  }
+  if (action === 'backup-list') {
+    const result = await api('backups');
+    backupRevision = result.revision;
+    showDialog('암호화 백업·복원',
+      `<p>복원 전 현재 데이터를 안전 백업으로 남깁니다. 다른 저장소·프로필의 백업은 복원하지 않습니다.</p>${result.backups.map(row=>`<div class="receipt-line"><strong>${esc(localTime(row.created_at))}</strong><p>${row.reason==='automatic'?'자동 백업':row.reason==='before-restore'?'복원 전 안전 백업':'수동 백업'} · ${(row.size/1024/1024).toFixed(2)}MB</p>${button('restore-backup','이 시점으로 복원',row.id)} <a class="button button-outline" href="/api/backups/${esc(row.id)}" download>암호화 백업 파일 저장</a></div>`).join('')||empty('백업이 없습니다.')}${button('close','닫기')}`
+      );
+    return true;
+  }
+  if (action === 'restore-backup') {
+    if (!confirm('현재 업무 데이터를 선택한 시점으로 되돌릴까요? 현재 데이터는 안전 백업으로 보존합니다.')) return true;
+    await api('backups/restore', {
+      id,
+      revision: backupRevision,
+      confirmation: 'restore'
+    });
+    clearPrivateView();
+    await refresh();
+    toast('복원을 완료했습니다. 현재 데이터는 복원 전 안전 백업에서 되돌릴 수 있습니다.');
+    return true;
+  }
+  if (action === 'startup-settings') {
+    const result = await api('autostart');
+    showDialog('로그인 자동 실행',
+      `<p>현재 사용자로 Windows에 로그인하면 이 프로필의 앱을 실행합니다. 관리자 권한이나 로그인 암호를 저장하지 않습니다.</p><p>현재 상태: <strong>${result.enabled?'켜짐':'꺼짐'}</strong></p>${button(result.enabled?'disable-startup':'enable-startup',result.enabled?'자동 실행 끄기':'자동 실행 켜기','','button-primary')}${button('close','닫기')}`
+      );
+    return true;
+  }
+  if (action === 'enable-startup' || action === 'disable-startup') {
+    await api('autostart', {
+      enabled: action === 'enable-startup'
+    });
+    closeDialog();
+    toast('로그인 자동 실행 설정을 저장했습니다.');
+    return true;
+  }
+  if (action === 'shutdown') {
+    if (!confirm('저장한 변경분을 백업하고 앱을 종료할까요? 저장하지 않은 보고 편집 내용은 사라집니다.')) return true;
+    await api('shutdown', {});
+    clearPrivateView();
+    connection.locked = true;
+    data = null;
+    connection.error = '앱을 종료했습니다. 다시 사용하려면 실행 명령 또는 로그인 자동 실행을 이용해주세요.';
+    render();
+    return true;
+  }
+  return false;
 }
 
 function render() {
@@ -303,9 +369,9 @@ function render() {
     .page)[1];
   document.getElementById('view-toggle').innerHTML = icon(state.compact ? 'desktop' : 'phone');
   document.querySelector('.workspace-footer').innerHTML =
-    `<span><span class="tiny-dot"></span>${connection.demo?'임시 데모 · 가상 데이터만 사용하세요':connection.locked?'로컬 작업 공간 · 잠김':'로컬 암호화 저장 · 외부 전송 없음'}</span><span>whoiam · v0.02</span>`;
+    `<span><span class="tiny-dot"></span>${connection.demo?'임시 데모 · 가상 데이터만 사용하세요':connection.locked?'로컬 작업 공간 · 잠김':'로컬 암호화 저장 · 외부 전송 없음'}</span><span>whoiam · v0.03</span>`;
   document.querySelector('.device-status').innerHTML =
-    `<span class="node-dot"></span>${connection.demo?'임시 데모':'로컬 장치'}`;
+    `<span class="node-dot"></span>${esc({production:'운영',development:'개발',test:'테스트',demo:'임시 데모'}[connection.profile] || (connection.demo?'임시 데모':'로컬 장치'))}`;
   const main = document.getElementById('main-content');
   if (connection.error) main.innerHTML =
     `${header('LOCAL WORKSPACE','로컬 서버에 연결해주세요.','실제 기능은 Python 로컬 서버에서 실행됩니다.')}<section class="card wide-card"><p>${esc(connection.error)}</p><pre>python -m apps.server --demo=True</pre><p>가상 데이터로 기능을 확인하거나, 데모 옵션 없이 실행해 OS 보안 저장소를 연결할 수 있습니다.</p>${button('retry','다시 연결')}</section>`;
@@ -435,6 +501,7 @@ function assemblyPayload(form) {
   };
 }
 async function act(action, id) {
+  if (await personalAction(action, id)) return;
   if (action === 'close') {
     closeDialog();
     return;
