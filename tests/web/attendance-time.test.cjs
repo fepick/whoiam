@@ -45,6 +45,31 @@ test('수동 입력에 실제 근무 안내와 24시간제 확인란을 표시�
   assert.match(html, /name="session_end"/);
   assert.match(html, /퇴근 예정 시각은 저장할 수 없습니다/);
   assert.match(html, /24시간제/);
+  assert.match(html, /수동 입력이 우선/);
   const summary = vm.runInContext("manualTimeSummary('2026-10-27T09:00', '2026-10-27T18:00')", context);
   assert.match(summary, /09:00.*18:00/);
+});
+
+test('겹친 기록을 안내하고 자기 자신과 맞닿은 구간은 제외한다', () => {
+  const {context} = application();
+  vm.runInContext(`data={sessions:[
+    {id:'a',start:'2026-10-27T10:00:00+09:00',end:'2026-10-27T17:00:00+09:00'},
+    {id:'b',start:'2026-10-27T18:00:00+09:00',end:'2026-10-27T19:00:00+09:00'}
+  ]};`, context);
+  assert.equal(vm.runInContext("manualOverlaps('2026-10-27T09:00','2026-10-27T18:00').length", context), 1);
+  assert.equal(vm.runInContext("manualOverlaps('2026-10-27T09:00','2026-10-27T18:00','a').length", context), 0);
+  assert.match(vm.runInContext("manualTimeSummary('2026-10-27T09:00','2026-10-27T18:00')", context), /기존 기록 1건.*대체/);
+});
+
+test('보관된 근무 이력을 새로운 수동 입력으로 불러온다', () => {
+  const {context, element} = application();
+  vm.runInContext(`data={sessions:[],attendance_history:[{
+    id:'replaced:a',original_id:'a',start:'2026-10-27T00:00:00+00:00',
+    end:'2026-10-27T09:00:00+00:00',breaks:[],at:'2026-10-27T11:00:00+00:00',
+    reason:'가상 정정',kind:'replaced'
+  }]};showAttendanceHistory();`, context);
+  assert.match(element('dialog-content').innerHTML, /이 기록으로 다시 입력/);
+  vm.runInContext("showTime('',data.attendance_history[0]);", context);
+  assert.match(element('dialog-content').innerHTML, /data-form="time" data-id=""/);
+  assert.match(element('dialog-content').innerHTML, /value="2026-10-27T09:00"/);
 });
