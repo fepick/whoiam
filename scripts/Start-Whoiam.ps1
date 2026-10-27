@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [switch]$Demo,
-    [ValidateRange(1024, 65535)][int]$Port = 4173
+    [ValidateRange(1024, 65535)][int]$Port = 4173,
+    [ValidateSet('production', 'development', 'test')][string]$Profile = 'production',
+    [string]$DataHome = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,6 +12,10 @@ $pythonExecutable = Join-Path $repositoryRoot '.venv/Scripts/python.exe'
 Push-Location -LiteralPath $repositoryRoot
 try {
     $arguments = @('-m', 'apps.server', "--demo=$($Demo.IsPresent)", "--port=$Port")
+    if (-not $Demo) {
+        $arguments += "--profile=$Profile"
+        if ($DataHome) { $arguments += "--data_home=$DataHome" }
+    }
     if (Test-Path -LiteralPath $pythonExecutable) {
         & $pythonExecutable @arguments
     }

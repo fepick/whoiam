@@ -9,11 +9,13 @@ from typing import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from loguru import logger
 
 from packages.core import Core
-from packages.platform.domain import DomainError, Json, fields, text
+from packages.platform.autostart import Autostart
+from packages.platform.backups import Backups, verify_database
+from packages.platform.domain import DomainError, Json, fields, integer, text
 from packages.platform.storage import EncryptedStore
 
 #: 저장소 탐색 대신 명시적으로 허용한 웹 자산만 제공한다.
@@ -32,7 +34,14 @@ ASSETS = {
 MAX_BODY_BYTES = 8 * 1024 * 1024
 
 
-def create_app(store: EncryptedStore, demo: bool = False, port: int = 4173) -> FastAPI:
+def create_app(
+    store: EncryptedStore,
+    demo: bool = False,
+    port: int = 4173,
+    profile: str = "test",
+    backups: Backups | None = None,
+    autostart: Autostart | None = None,
+) -> FastAPI:
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     core = Core(store)
     session = secrets.token_urlsafe(32)
@@ -41,6 +50,7 @@ def create_app(store: EncryptedStore, demo: bool = False, port: int = 4173) -> F
     hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
     app.state.core = core
     app.state.bootstrap = bootstrap
+    app.state.shutdown = None
 
     @app.middleware("http")
     async def protect(
@@ -122,7 +132,19 @@ def create_app(store: EncryptedStore, demo: bool = False, port: int = 4173) -> F
 
     @app.get("/api/status")
     def status() -> Json:
-        return {"locked": store.locked, "demo": demo, "csrf": csrf, "version": "0.02"}
+        return {
+            "locked": store.locked,
+            "demo": demo,
+            "csrf": csrf,
+            "version": "0.03",
+            "profile": profile,
+            "revision": store.revision,
+            "backup": {
+                "available": backups is not None,
+                "last_created": backups.last_created if backups else "",
+                "error": backups.error if backups else False,
+            },
+        }
 
     @app.post("/api/session")
     def login(body: Json) -> JSONResponse:
@@ -146,6 +168,8 @@ def create_app(store: EncryptedStore, demo: bool = False, port: int = 4173) -> F
     @app.post("/api/unlock")
     def unlock() -> Json:
         store.unlock()
+        if backups:
+            backups.safe_backup(force=True)
         return {"locked": False}
 
     @app.post("/api/lock")
@@ -158,11 +182,74 @@ def create_app(store: EncryptedStore, demo: bool = False, port: int = 4173) -> F
         fields(body, {"name", "data", "request_id"})
         if not isinstance(body.get("data"), dict):
             raise DomainError("명령 데이터를 확인해주세요.")
-        return {
-            "result": core.execute(
-                text(body, "name", 64), body["data"], text(body, "request_id", 36)
+        result = core.execute(
+            text(body, "name", 64), body["data"], text(body, "request_id", 36)
+        )
+        if backups:
+            backups.safe_backup()
+        return {"result": result}
+
+    @app.get("/api/backups")
+    def backup_list() -> Json:
+        if backups is None:
+            raise DomainError("메모리 데모에서는 파일 백업을 제공하지 않습니다.")
+        return {"backups": backups.list(), "revision": store.revision}
+
+    @app.post("/api/backups")
+    def backup_create() -> Json:
+        if backups is None:
+            raise DomainError("메모리 데모에서는 파일 백업을 제공하지 않습니다.")
+        return backups.create()
+
+    @app.get("/api/backups/{identifier}")
+    def backup_download(identifier: str) -> FileResponse:
+        store.require_unlocked()
+        if backups is None:
+            raise DomainError("메모리 데모에서는 파일 백업을 제공하지 않습니다.")
+        path = backups.path(identifier)
+        verify_database(path, store.cipher, backups.identity())
+        return FileResponse(
+            path, filename=identifier, media_type="application/octet-stream"
+        )
+
+    @app.post("/api/backups/restore")
+    def backup_restore(body: Json) -> Json:
+        fields(body, {"id", "revision", "confirmation"})
+        if backups is None or text(body, "confirmation", 16) != "restore":
+            raise DomainError("백업 복원 확인이 필요합니다.")
+        return backups.restore(text(body, "id", 100), integer(body, "revision"))
+
+    @app.post("/api/shutdown")
+    def shutdown() -> Json:
+        if app.state.shutdown is None:
+            raise DomainError("현재 실행 방식에서는 종료 기능을 제공하지 않습니다.")
+        if backups:
+            backups.safe_backup(force=True)
+            if backups.error:
+                raise DomainError(
+                    "백업에 실패해 앱을 유지합니다. 저장 공간과 권한을 확인해주세요.",
+                    503,
+                )
+        app.state.shutdown()
+        return {"stopped": True}
+
+    @app.get("/api/autostart")
+    def autostart_status() -> Json:
+        if autostart is None:
+            raise DomainError(
+                "현재 실행 방식에서는 자동 실행 설정을 제공하지 않습니다."
             )
-        }
+        return autostart.status()
+
+    @app.post("/api/autostart")
+    def autostart_set(body: Json) -> Json:
+        fields(body, {"enabled"})
+        store.require_unlocked()
+        if autostart is None:
+            raise DomainError(
+                "현재 실행 방식에서는 자동 실행 설정을 제공하지 않습니다."
+            )
+        return autostart.set(body.get("enabled"))
 
     @app.get("/api/documents/{reference}")
     def document(reference: str) -> Response:
