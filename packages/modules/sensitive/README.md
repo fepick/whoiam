@@ -19,11 +19,11 @@
 
 | 유형 | 내용 | 로컬 위치 |
 | --- | --- | --- |
-| credential | 로그인·API 자격증명 | `.private/vault/` |
-| payment-method | 카드 별칭·카드사·끝 네 자리·서비스 참조 | `.private/vault/` |
-| person | 이름·연락처·주소 등 필요한 개인정보 | `.private/vault/` |
-| session | 쿠키·인증 세션·브라우저 상태 | `.private/sessions/` |
-| document | 구매 증빙·급여 자료 | `.private/documents/` |
+| credential | 로그인·API 자격증명 | `.private/database/`의 암호화 레코드 |
+| payment-method | 카드 별칭·카드사·끝 네 자리·서비스 참조 | `.private/database/`의 암호화 레코드 |
+| person | 이름·연락처·주소 등 필요한 개인정보 | `.private/database/`의 암호화 레코드 |
+| session | 외부 사이트 쿠키·세션 | 현재 미구현, 향후 `.private/sessions/` |
+| document | 구매 증빙·급여 자료 | `.private/database/`의 암호화 레코드 |
 
 전체 카드번호는 기본 저장 범위에서 제외하고 CVC/CVV·PIN·트랙 데이터는 저장하지 않습니다.
 키는 위 위치에 보관하지 않고 OS 보안 저장소와 연결합니다.
