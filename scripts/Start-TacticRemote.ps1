@@ -74,7 +74,10 @@ if ($Preview) {
 # 이 앱의 자식 프로세스에만 도구 경로를 전달하고 호출한 셸의 환경은 복구한다.
 $previousPath = $env:PATH
 $previousPreCommitHome = $env:PRE_COMMIT_HOME
+$previousElectronMode = $env:ELECTRON_RUN_AS_NODE
 try {
+    # IDE의 Node 실행 모드가 Electron 앱에 전파되면 창 없이 종료될 수 있다.
+    Remove-Item -LiteralPath 'Env:ELECTRON_RUN_AS_NODE' -ErrorAction SilentlyContinue
     # CLI 설치 뒤에도 IDE에 남아 있는 이전 PATH를 현재 사용자 등록값으로 보완한다.
     $registeredUserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     $env:PATH = ($toolDirectories -join ';') + ';' + $registeredUserPath + ';' + $previousPath
@@ -86,5 +89,6 @@ try {
 finally {
     $env:PATH = $previousPath
     $env:PRE_COMMIT_HOME = $previousPreCommitHome
+    $env:ELECTRON_RUN_AS_NODE = $previousElectronMode
 }
 Write-Output 'Tactic Remote launched. Select the project folder and Codex in the companion/mobile app.'
