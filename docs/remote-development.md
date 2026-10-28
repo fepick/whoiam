@@ -27,6 +27,8 @@ Claude Code가 `%USERPROFILE%\.local\bin\claude.exe`에 설치되어 있으면 �
 CLI 설치 전부터 켜져 있던 IDE에서도 새 경로를 사용할 수 있도록 현재 등록된 사용자 PATH를 읽어 실행 환경에 반영한다.
 Codex 런타임에 포함된 PowerShell이 있고 `pwsh` 명령이 없으면 그 경로도 추가한다.
 전역 PATH·로그인 정보·방화벽·자동 시작 설정은 수정하지 않는다.
+IDE나 개발 도구가 설정한 `ELECTRON_RUN_AS_NODE`는 companion을 실행하는 동안만 제거하고 호출한 셸에서는 복구한다.
+이 값이 `1`이면 Electron 실행 파일이 일반 앱 대신 Node 모드로 시작해 창 없이 종료될 수 있다.
 이 설명은 저장소의 실행 스크립트에 해당한다. 공식 Codex CLI 설치 프로그램은 사용자 PATH에 CLI 경로를 등록한다.
 앱이 이미 실행 중이면 앱의 종료 기능으로 완전히 종료한 뒤 스크립트로 다시 실행해야 새 환경이 적용된다.
 Tactic Remote에서 작업 디렉터리는 별도로 선택해야 한다.
