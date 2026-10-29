@@ -24,6 +24,16 @@ function application() {
   return {context, element};
 }
 
+test('24시간 입력은 숫자 입력을 정규화하고 범위를 검사한다', () => {
+  const {context} = application();
+  for (const [input, expected] of [['900','09:00'], ['0900','09:00'], ['0:00','00:00'], ['1200','12:00'], ['2359','23:59'], ['24:00',null], ['1260',null], ['오후 1:00',null], ['', '']]) {
+    assert.equal(vm.runInContext(`normalizeClock(${JSON.stringify(input)})`, context), expected);
+  }
+  const html = vm.runInContext("dateTimeField('ETA', 'eta', '2026-10-30T18:30')", context);
+  assert.doesNotMatch(html, /type="(?:time|datetime-local)"/);
+  assert.match(html, /data-time-part="clock"[^>]*value="18:30"/);
+});
+
 test('오전·오후·정오·자정 시각을 24시간제 한국 시간으로 전달한다', () => {
   const {context} = application();
   for (const [utc, local] of [

@@ -42,6 +42,9 @@ const state = {
   materialTab: 'purchases',
   recordTab: 'time',
   taskTab: 'all',
+  taskMode: 'list',
+  taskCategory: '',
+  draggedTask: '',
   compact: false,
   busy: false
 };
@@ -79,6 +82,7 @@ const button = (action, label, id = '', style = 'button-outline') =>
   `<button type="button" class="button ${style}" data-action="${action}" data-id="${esc(id)}">${label}</button>`;
 const empty = text => `<p class="empty-hint">${esc(text)}</p>`;
 const field = (label, name, value = '', type = 'text', extra = '') =>
+  type === 'datetime-local' ? dateTimeField(label, name, value, extra) :
   `<label class="entry-field">${label}<input name="${name}" type="${type}" value="${esc(value)}" ${extra}></label>`;
 const area = (label, name, value = '', max = 240) =>
   `<label class="entry-field">${label}<textarea name="${name}" rows="3" maxlength="${max}">${esc(value)}</textarea></label>`;
@@ -101,6 +105,49 @@ const localTime = iso => iso ? new Date(iso).toLocaleString('ko-KR', {
 const localInput = iso => iso ? new Date(new Date(iso).getTime() + 9 * 3600000).toISOString().slice(
   0, 16) : '';
 const zoned = value => value ? `${value}:00+09:00` : '';
+
+function normalizeClock(value) {
+  const raw = value.trim();
+  if (!raw) return '';
+  const match = /^(\d{1,2}):(\d{2})$/.exec(raw) || /^(\d{1,2})(\d{2})$/.exec(raw);
+  if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) return null;
+  return `${match[1].padStart(2, '0')}:${match[2]}`;
+}
+
+function dateTimeField(label, name, value = '', extra = '') {
+  const [date = '', time = ''] = String(value || '').split('T');
+  const required = /\brequired\b/.test(extra);
+  return `<fieldset class="datetime-field" data-required="${required}"><legend>${esc(label)} · 24시간제</legend><input type="hidden" ${name ? `name="${esc(name)}"` : ''} value="${esc(value)}" ${extra}><div class="datetime-parts"><label class="entry-field">날짜<input type="date" data-time-part="date" value="${esc(date)}" aria-label="${esc(label)} 날짜" ${required || time ? 'required' : ''}></label><label class="entry-field">시각<input type="text" data-time-part="clock" value="${esc(time)}" aria-label="${esc(label)} 시각 (24시간제)" inputmode="numeric" placeholder="09:00" maxlength="5" autocomplete="off" ${required || date ? 'required' : ''}></label></div><small>00:00~23:59 · 0900처럼 입력할 수도 있습니다.</small></fieldset>`;
+}
+
+function setDateTimeValue(hidden, value) {
+  hidden.value = value;
+  const group = hidden.closest?.('.datetime-field');
+  if (!group) return;
+  const [date = '', clock = ''] = value.split('T');
+  group.querySelector('[data-time-part="date"]').value = date;
+  group.querySelector('[data-time-part="clock"]').value = clock;
+}
+
+function updateDateTime(event) {
+  if (!event.target.matches('[data-time-part]')) return;
+  const group = event.target.closest('.datetime-field');
+  const date = group.querySelector('[data-time-part="date"]');
+  const clock = group.querySelector('[data-time-part="clock"]');
+  const hidden = group.querySelector('input[type="hidden"]');
+  const normalized = normalizeClock(clock.value);
+  clock.setCustomValidity(normalized === null ? '시각을 00:00~23:59로 입력해주세요.' : '');
+  date.required = group.dataset.required === 'true' || Boolean(clock.value);
+  clock.required = group.dataset.required === 'true' || Boolean(date.value);
+  if (event.type !== 'input' && normalized !== null) clock.value = normalized;
+  hidden.value = date.value || clock.value ? `${date.value}T${normalized ?? clock.value}` : '';
+  hidden.dispatchEvent(new Event('input', {bubbles: true}));
+}
+// 보고 편집기의 input 처리보다 먼저 날짜·시각을 하나의 값으로 합친다.
+document.addEventListener('input', updateDateTime, true);
+document.addEventListener('change', updateDateTime, true);
+document.addEventListener('focusout', updateDateTime, true);
+window.WhoiamTime = {field: dateTimeField};
 
 async function api(path, body) {
   const options = {
@@ -132,6 +179,8 @@ async function api(path, body) {
 }
 
 function clearPrivateView() {
+  state.draggedTask = '';
+  state.taskCategory = '';
   currentReport = '';
   reportDirty = false;
   pendingRequest = null;
@@ -250,12 +299,86 @@ function homeView() {
 }
 
 function tasksView() {
-  const tasks = data.tasks.filter(task => state.taskTab === 'all' ? task.status !== 'archived' :
+  const tasks = data.tasks.filter(task => matchesCategory(task) && (state.taskTab === 'all' ? task.status !== 'archived' :
     state.taskTab === 'archived' ? task.status === 'archived' : state.taskTab === 'done' ? task
     .status === 'done' : !['done', 'archived'].includes(task
-      .status));
-  return `${header('TASKS & PLANS','업무와 소요시간','완료 여부와 실제 소요시간을 각각 기록합니다.')}<div class="toolbar"><div class="tabs">${[['all','전체'],['todo','진행'],['done','완료'],['archived','보관']].map(([id,label])=>`<button data-task-tab="${id}" class="${state.taskTab===id?'active':''}">${label}</button>`).join('')}</div>${button('new-task','＋ 업무 추가','','button-primary')}</div><section class="card wide-card">${tasks.length?tasks.map(taskRow).join(''):empty('업무를 추가해 오늘의 계획을 세워보세요.')}</section><section class="card wide-card"><div class="card-heading"><h2>오늘 입력한 업무 기록</h2><span>${duration(data.logs.reduce((sum,row)=>sum+row.minutes,0))}</span></div>${data.logs.length?data.logs.map(log=>`<div class="timeline-item"><span>${log.minutes}분</span><div><strong>${esc(log.title)}</strong><small>${esc(log.note)}</small></div>${button('edit-log','정정',log.id)}</div>`).join(''):empty('업무별 시간 기록이 아직 없습니다.')}</section>${commandBox()}`;
+      .status)));
+  const categories = [...new Set(data.tasks.map(task => task.category || ''))];
+  if (state.taskCategory && !categories.includes(state.taskCategory.slice(9))) categories.push(state.taskCategory.slice(9));
+  categories.sort((a, b) => a.localeCompare(b, 'ko'));
+  const logs = data.logs.filter(log => !state.taskCategory || matchesCategory(data.tasks.find(task => task.id === log.task_id)));
+  return `${header('TASKS & PLANS','업무와 소요시간','상태를 옮겨 진행을 정리하고, 실제 소요시간을 기록하세요.')}
+    <div class="toolbar task-toolbar"><div class="tabs" aria-label="업무 상태 필터">${[['all','전체'],['todo','진행'],['done','완료'],['archived','보관']].map(([id,label])=>`<button data-task-tab="${id}" class="${state.taskTab===id?'active':''}" aria-pressed="${state.taskTab===id}">${label}</button>`).join('')}</div>${button('new-task','＋ 업무 추가','','button-primary')}</div>
+    <div class="toolbar task-controls">${select('분류','task-category',[['','모든 분류'],...categories.map(category=>[`category:${category}`,category||'미분류'])],state.taskCategory)}<div class="tabs view-tabs" aria-label="업무 보기 모드">${[['list','리스트'],['kanban','칸반']].map(([mode,title])=>`<button data-task-mode="${mode}" class="${state.taskMode===mode?'active':''}" aria-pressed="${state.taskMode===mode}">${title}</button>`).join('')}</div><span class="subtle-label">${tasks.length}개 업무</span></div>
+    ${state.taskMode==='kanban'?kanbanBoard(tasks):`<section class="card wide-card">${tasks.length?tasks.map(taskRow).join(''):empty('조건에 맞는 업무가 없습니다.')}</section>`}
+    <section class="card wide-card"><div class="card-heading"><h2>오늘 입력한 업무 기록${state.taskCategory?' · 선택한 분류':''}</h2><span>${duration(logs.reduce((sum,row)=>sum+row.minutes,0))}</span></div>${logs.length?logs.map(log=>`<div class="timeline-item"><span>${log.minutes}분</span><div><strong>${esc(log.title)}</strong><small>${esc(log.note)}</small></div>${button('edit-log','정정',log.id)}</div>`).join(''):empty('조건에 맞는 시간 기록이 없습니다.')}</section>${commandBox()}`;
 }
+
+function matchesCategory(task) {
+  return !state.taskCategory || Boolean(task && `category:${task.category || ''}` === state.taskCategory);
+}
+
+function kanbanCard(task) {
+  const minutes = data.logs.filter(log => log.task_id === task.id).reduce((sum, log) => sum + log.minutes, 0);
+  return `<article class="kanban-card" draggable="true" data-task-card="${esc(task.id)}" aria-label="${esc(task.title)}">
+    <div class="kanban-card-top"><span class="tag">${esc(task.priority)}</span><span>${esc(task.category || '미분류')}</span><span class="drag-hint" aria-hidden="true">⠿</span></div>
+    <h3>${esc(task.title)}</h3><p class="task-detail">${esc(task.detail)}</p>
+    <div class="kanban-meta"><span>예정일 ${esc(task.due || '미정')}</span><span>ETA ${task.eta?esc(localInput(task.eta).replace('T',' ')):'미정'}</span><strong>오늘 기록 ${duration(minutes)}</strong></div>
+    <label class="kanban-status">상태<select data-task-status="${esc(task.id)}" aria-label="${esc(task.title)} 상태">${['todo','in_progress','done','archived'].map(status=>`<option value="${status}" ${task.status===status?'selected':''}>${labels[status]}</option>`).join('')}</select></label>
+    <div class="row-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></article>`;
+}
+
+function kanbanBoard(tasks) {
+  const statuses = state.taskTab === 'archived' ? ['todo','in_progress','done','archived'] : ['todo','in_progress','done'];
+  return `<p class="subtle-label">카드를 다른 열로 드래그하거나 카드의 상태 선택으로 이동하세요. 소요시간은 별도로 기록합니다.</p><div class="kanban-board" aria-label="업무 칸반 보드">${statuses.map(status=>{
+    const cards = tasks.filter(task=>task.status===status);
+    return `<section class="kanban-column" data-drop-status="${status}" aria-label="${labels[status]}"><div class="kanban-heading"><h2>${labels[status]}</h2><span class="counter">${cards.length}</span></div><div class="kanban-cards">${cards.map(kanbanCard).join('')||'<p class="kanban-empty">이곳으로 업무를 옮기세요</p>'}</div></section>`;
+  }).join('')}</div>`;
+}
+
+async function moveTask(id, status) {
+  const task = data?.tasks.find(task => task.id === id);
+  if (!task || !['todo','in_progress','done','archived'].includes(status) || task.status === status) return;
+  try {
+    await run('tasks.save', {id, status});
+    render();
+    toast(`${labels[status]} 상태로 저장했습니다.`);
+  } catch (error) {
+    render();
+    toast(error.message || '상태를 저장하지 못했습니다. 다시 시도해주세요.');
+  }
+}
+
+document.addEventListener('dragstart', event => {
+  const card = event.target.closest('[data-task-card]');
+  if (!card) return;
+  if (state.busy || event.target.closest('button,select,input,a')) { event.preventDefault(); return; }
+  state.draggedTask = card.dataset.taskCard;
+  event.dataTransfer.setData('text/plain', state.draggedTask);
+  event.dataTransfer.effectAllowed = 'move';
+  card.classList.add('dragging');
+});
+document.addEventListener('dragover', event => {
+  const column = event.target.closest('[data-drop-status]');
+  if (!column || !state.draggedTask || state.busy) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.kanban-column.drop-target').forEach(node => node.classList.remove('drop-target'));
+  column.classList.add('drop-target');
+});
+function clearTaskDrag() {
+  state.draggedTask = '';
+  document.querySelectorAll('.dragging,.drop-target').forEach(node => node.classList.remove('dragging','drop-target'));
+}
+document.addEventListener('dragend', clearTaskDrag);
+document.addEventListener('drop', event => {
+  const column = event.target.closest('[data-drop-status]');
+  if (!column || !state.draggedTask) return;
+  event.preventDefault();
+  const id = state.draggedTask;
+  clearTaskDrag();
+  void moveTask(id, column.dataset.dropStatus);
+});
 
 function purchasesView() {
   return `<div class="material-stats"><section class="card stat-card"><span>진행 중인 주문</span><div class="stat-number">${data.orders.filter(o=>!['received','cancelled'].includes(o.status)).length}<small>건</small></div></section><section class="card stat-card"><span>예정일 확인</span><div class="stat-number">${data.orders.filter(o=>!['received','cancelled'].includes(o.status)&&o.eta&&o.eta<=data.today).length}<small>건</small></div></section><section class="card stat-card"><span>증빙 수집 대기</span><div class="stat-number">${data.orders.filter(o=>o.status!=='cancelled'&&(!o.statement_ref||!o.receipt_ref)).length}<small>건</small></div></section></div><section class="card wide-card"><div class="card-heading"><h2>구매 내역</h2><span class="subtle-label">판매처 결제 후 수동 등록</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>물품 · 메모</th><th>판매처 · 금액</th><th>도착 예정</th><th>상태</th><th></th></tr></thead><tbody>${data.orders.map(order=>`<tr><td><strong>${esc(order.lines.map(line=>line.name).join(', '))}</strong><div class="task-detail">${esc(order.memo)}</div></td><td>${esc(order.supplier)}<div class="task-detail">${money(order.amount)}</div></td><td>${esc(order.eta||'미정')}</td><td><span class="table-status ${order.status==='received'?'green':'amber'}">${esc(labels[order.status])}</span><div class="task-detail">명세서 ${order.statement_ref?'✓':'대기'} · 전표 ${order.receipt_ref?'✓':'대기'}</div></td><td>${button('order-detail','상세',order.id)}</td></tr>`).join('')}</tbody></table></div>${!data.orders.length?empty('구매한 물품을 등록해 배송과 증빙을 관리하세요.'):''}</section>`;
@@ -502,8 +625,8 @@ function syncDefaultLunch(form) {
     'session_end').value).slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
   form.querySelectorAll('.break-line[data-default-lunch="true"]').forEach(line => {
-    line.querySelector('[name="start"]').value = `${date}T12:00`;
-    line.querySelector('[name="end"]').value = `${date}T13:00`;
+    setDateTimeValue(line.querySelector('[name="start"]'), `${date}T12:00`);
+    setDateTimeValue(line.querySelector('[name="end"]'), `${date}T13:00`);
   });
 }
 
@@ -792,6 +915,11 @@ document.addEventListener('click', event => {
     render();
     return;
   }
+  if (target.dataset.taskMode) {
+    state.taskMode = target.dataset.taskMode;
+    render();
+    return;
+  }
   if (target.dataset.action === 'remove-line') {
     target.closest('fieldset').remove();
     return;
@@ -984,6 +1112,15 @@ document.addEventListener('submit', async event => {
 });
 document.addEventListener('change', async event => {
   const input = event.target;
+  if (input.name === 'task-category') {
+    state.taskCategory = input.value;
+    render();
+    return;
+  }
+  if (input.dataset.taskStatus) {
+    await moveTask(input.dataset.taskStatus, input.value);
+    return;
+  }
   if (input.name === 'secret-kind') {
     showSecret(input.value);
     return;
@@ -1078,7 +1215,7 @@ async function boot() {
 }
 if (navItems.some(row => row[0] === location.hash.slice(1))) state.page = location.hash.slice(1);
 async function poll() {
-  if (state.busy) return;
+  if (state.busy || state.draggedTask) return;
   try {
     if (document.hidden || document.getElementById('flow-dialog').open) {
       const status = await api('status');
