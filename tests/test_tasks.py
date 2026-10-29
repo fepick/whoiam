@@ -5,6 +5,25 @@ from packages.platform.domain import DomainError
 from packages.platform.storage import EncryptedStore
 
 
+def test_board_status_change_preserves_task_and_time(store: EncryptedStore) -> None:
+    tasks = Tasks(store)
+    task = tasks.save({"title": "가상 업무", "category": "개발", "priority": "P1"})
+    tasks.log(
+        {
+            "task_id": task["id"],
+            "date": "2026-10-30",
+            "minutes": 30,
+            "status": "in_progress",
+        }
+    )
+    updated = tasks.save({"id": task["id"], "status": "done"})
+    assert updated["status"] == "done"
+    assert updated["title"] == task["title"]
+    assert updated["category"] == "개발"
+    assert updated["priority"] == "P1"
+    assert tasks.daily("2026-10-30")[0]["minutes"] == 30
+
+
 def test_tasks_logs_and_input_validation(store: EncryptedStore) -> None:
     tasks = Tasks(store)
     task = tasks.save({"title": "가상 회로 측정", "due": "2026-10-27"})
