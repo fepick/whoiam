@@ -52,6 +52,8 @@ class Reporting:
                 "title": task["title"],
                 "detail": task["detail"],
                 "priority": task["priority"],
+                "estimated_minutes": task.get("estimated_minutes"),
+                "progress": task.get("progress", 0),
                 "eta": (
                     moment(task["eta"]).astimezone(SEOUL).strftime("%Y-%m-%dT%H:%M")
                     if task["eta"]
@@ -109,7 +111,14 @@ class Reporting:
                     (
                         {"title", "detail", "minutes", "status"}
                         if group == "daily"
-                        else {"title", "detail", "priority", "eta"}
+                        else {
+                            "title",
+                            "detail",
+                            "priority",
+                            "eta",
+                            "estimated_minutes",
+                            "progress",
+                        }
                     ),
                 )
                 result = {
@@ -129,6 +138,14 @@ class Reporting:
                     if eta:
                         moment(eta + ":00+09:00")
                     result["eta"] = eta
+                    result["estimated_minutes"] = (
+                        None
+                        if row.get("estimated_minutes") is None
+                        else integer(row, "estimated_minutes", 0, 525600)
+                    )
+                    result["progress"] = integer(
+                        {"progress": 0, **row}, "progress", 0, 100
+                    )
                 normalized[group].append(result)
         identifier = text(data, "id", 64, False) or uid()
         if attendance_minutes is None:

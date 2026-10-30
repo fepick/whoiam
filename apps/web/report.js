@@ -30,12 +30,6 @@
       `${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) ===
     value;
   const weekday = value => '일월화수목금토' [new Date(`${value}T12:00:00Z`).getUTCDay()];
-  const etaValid = value => !value || (dateValid(value.slice(0, 10)) &&
-    /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/.test(value));
-  const etaLines = value => value ? [
-    `${value.slice(5, 7)}.${value.slice(8, 10)} (${weekday(value.slice(0, 10))})`, value.slice(
-      11, 16)
-  ] : ['미정'];
   let previewURL = '';
   let generation = 0;
   let timer;
@@ -47,7 +41,8 @@
     if (model.daily.some(row => row.minutes !== null && (!Number.isInteger(Number(row.minutes)) ||
         Number(row.minutes) < 0 || Number(row.minutes) > 1440)))
     return '소요시간은 0~1440 사이의 정수 분으로 입력해주세요.';
-    if (model.planned.some(row => !etaValid(row.eta))) return 'ETA의 날짜와 시각을 확인해주세요.';
+    if (model.planned.some(row => row.estimated_minutes !== null && (!Number.isInteger(row.estimated_minutes) || row.estimated_minutes < 0 || row.estimated_minutes > 525600))) return '예상 소요시간은 0~525600 사이의 정수 분으로 입력해주세요.';
+    if (model.planned.some(row => !Number.isInteger(row.progress) || row.progress < 0 || row.progress > 100)) return '진행도는 0~100 사이의 정수로 입력해주세요.';
     return '';
   }
 
@@ -56,11 +51,11 @@
     const field = (key, label, input) => `<label class="report-field">${label}${input}</label>`;
     const attrs = key =>
       `data-report-group="${group}" data-report-index="${index}" data-report-field="${key}"`;
-    return `<fieldset class="report-edit-row"><legend>${prefix} ${String(index + 1).padStart(2, '0')}</legend><div class="report-edit-title"><input ${attrs('title')} value="${escape(row.title)}" maxlength="64" aria-label="${prefix} ${index + 1} 업무명" placeholder="업무명"><button type="button" class="report-remove" data-report-action="remove" data-group="${group}" data-index="${index}" aria-label="${prefix} ${index + 1} 삭제">×</button></div><input class="report-detail-input" ${attrs('detail')} value="${escape(row.detail)}" maxlength="2000" aria-label="${prefix} ${index + 1} 상세내용" placeholder="결과나 다음 행동을 짧게 적어주세요"><div class="report-edit-fields">${group === 'daily' ? field('minutes', '소요시간 (분)', `<input type="number" min="0" max="1440" step="1" inputmode="numeric" ${attrs('minutes')} value="${row.minutes === null ? '' : escape(row.minutes)}" aria-label="진행 ${index + 1} 소요시간 (분)" placeholder="미입력">`) + field('status', '진행 상태', `<select ${attrs('status')} aria-label="진행 ${index + 1} 상태">${['완료', '진행 중'].map(value => `<option ${row.status === value ? 'selected' : ''}>${value}</option>`).join('')}</select>`) : field('priority', '우선순위', `<select ${attrs('priority')} aria-label="예정 ${index + 1} 우선순위">${Object.entries(priorityLabels).map(([key, value]) => `<option value="${key}" ${row.priority === key ? 'selected' : ''}>${key} · ${value}</option>`).join('')}</select>`) + window.WhoiamTime.field(`ETA ${index + 1}`, '', row.eta, attrs('eta'))}</div></fieldset>`;
+    return `<fieldset class="report-edit-row"><legend>${prefix} ${String(index + 1).padStart(2, '0')}</legend><div class="report-edit-title"><input ${attrs('title')} value="${escape(row.title)}" maxlength="64" aria-label="${prefix} ${index + 1} 업무명" placeholder="업무명"><button type="button" class="report-remove" data-report-action="remove" data-group="${group}" data-index="${index}" aria-label="${prefix} ${index + 1} 삭제">×</button></div><input class="report-detail-input" ${attrs('detail')} value="${escape(row.detail)}" maxlength="2000" aria-label="${prefix} ${index + 1} 상세내용" placeholder="결과나 다음 행동을 짧게 적어주세요"><div class="report-edit-fields">${group === 'daily' ? field('minutes', '소요시간 (분)', `<input type="number" min="0" max="1440" step="1" inputmode="numeric" ${attrs('minutes')} value="${row.minutes === null ? '' : escape(row.minutes)}" aria-label="진행 ${index + 1} 소요시간 (분)" placeholder="미입력">`) + field('status', '진행 상태', `<select ${attrs('status')} aria-label="진행 ${index + 1} 상태">${['완료', '진행 중'].map(value => `<option ${row.status === value ? 'selected' : ''}>${value}</option>`).join('')}</select>`) : field('priority', '우선순위', `<select ${attrs('priority')} aria-label="예정 ${index + 1} 우선순위">${Object.entries(priorityLabels).map(([key, value]) => `<option value="${key}" ${row.priority === key ? 'selected' : ''}>${key} · ${value}</option>`).join('')}</select>`) + field('estimated_minutes', '예상 소요시간 (분)', `<input type="number" min="0" max="525600" step="1" ${attrs('estimated_minutes')} value="${escape(row.estimated_minutes ?? '')}" aria-label="예정 ${index + 1} 예상 소요시간 (분)" placeholder="미입력">`) + field('progress', '진행도 (%)', `<input type="number" min="0" max="100" step="1" required ${attrs('progress')} value="${escape(row.progress)}" aria-label="예정 ${index + 1} 진행도 (%)">`)}</div></fieldset>`;
   }
 
   function render() {
-    return `<section class="report-workbench" id="report-workbench"><div class="report-editor"><div class="report-editor-heading"><div><div class="eyebrow">ONE-PAGE DAILY REPORT</div><h2>오늘의 일을 한 장에.</h2><p>내용을 바꾸면 오른쪽 이미지에 반영됩니다.</p></div><span class="tag green">PNG</span></div><label class="report-date-label">보고 날짜<input type="date" data-report-field="date" value="${escape(model.date)}" aria-label="보고 날짜"></label><section class="report-edit-section"><div class="card-heading"><h3>01. 일일 진행사항</h3><span class="report-total" id="report-total">합계 ${duration(totalMinutes())}</span></div>${model.daily.map((row, index) => editorRow(row, index, 'daily')).join('')}<button type="button" class="report-add" data-report-action="add" data-group="daily" ${model.daily.length >= MAX_ROWS ? 'disabled' : ''}>＋ 진행사항 추가 <span>최대 ${MAX_ROWS}개</span></button></section><section class="report-edit-section"><div class="card-heading"><h3>02. 진행 예정사항</h3><span class="subtle-label">P1 → P2 → P3</span></div>${model.planned.map((row, index) => editorRow(row, index, 'planned')).join('')}<button type="button" class="report-add" data-report-action="add" data-group="planned" ${model.planned.length >= MAX_ROWS ? 'disabled' : ''}>＋ 예정사항 추가 <span>최대 ${MAX_ROWS}개</span></button></section><label class="report-note-label">공유·확인사항<textarea data-report-field="note" maxlength="240" rows="3" aria-label="공유 및 확인사항">${escape(model.note)}</textarea></label><p class="report-local-note">보고서 저장을 누르면 로컬 암호화 저장소에 보관합니다. 편집 후 저장해주세요.</p></div><aside class="report-image-panel" aria-label="일일 보고 이미지 미리보기"><div class="report-preview-heading"><span>한 장 미리보기</span><span>1200px · PNG</span></div><div class="report-preview-paper"><img id="report-preview" alt="일일 진행사항·소요시간, 예정사항·우선순위·ETA와 whoiam 워터마크가 담긴 일일 보고 이미지" ${previewURL ? `src="${previewURL}"` : ''}></div><p class="report-validation" id="report-validation" role="status" aria-live="polite"></p><button class="button button-primary report-download" data-report-action="download">PNG 이미지 저장 <span>↓</span></button><button class="button button-outline report-download" data-report-action="preview">크게 보기</button><p class="report-local-note">시간은 직접 입력한 업무 소요시간의 합계입니다.<br>ETA는 해당 업무의 예상 완료 시각입니다.</p></aside></section>`;
+    return `<section class="report-workbench" id="report-workbench"><div class="report-editor"><div class="report-editor-heading"><div><div class="eyebrow">ONE-PAGE DAILY REPORT</div><h2>오늘의 일을 한 장에.</h2><p>내용을 바꾸면 오른쪽 이미지에 반영됩니다.</p></div><span class="tag green">PNG</span></div><label class="report-date-label">보고 날짜<input type="date" data-report-field="date" value="${escape(model.date)}" aria-label="보고 날짜"></label><section class="report-edit-section"><div class="card-heading"><h3>01. 일일 진행사항</h3><span class="report-total" id="report-total">합계 ${duration(totalMinutes())}</span></div>${model.daily.map((row, index) => editorRow(row, index, 'daily')).join('')}<button type="button" class="report-add" data-report-action="add" data-group="daily" ${model.daily.length >= MAX_ROWS ? 'disabled' : ''}>＋ 진행사항 추가 <span>최대 ${MAX_ROWS}개</span></button></section><section class="report-edit-section"><div class="card-heading"><h3>02. 진행 예정사항</h3><span class="subtle-label">P1 → P2 → P3</span></div>${model.planned.map((row, index) => editorRow(row, index, 'planned')).join('')}<button type="button" class="report-add" data-report-action="add" data-group="planned" ${model.planned.length >= MAX_ROWS ? 'disabled' : ''}>＋ 예정사항 추가 <span>최대 ${MAX_ROWS}개</span></button></section><label class="report-note-label">공유·확인사항<textarea data-report-field="note" maxlength="240" rows="3" aria-label="공유 및 확인사항">${escape(model.note)}</textarea></label><p class="report-local-note">보고서 저장을 누르면 로컬 암호화 저장소에 보관합니다. 편집 후 저장해주세요.</p></div><aside class="report-image-panel" aria-label="일일 보고 이미지 미리보기"><div class="report-preview-heading"><span>한 장 미리보기</span><span>1200px · PNG</span></div><div class="report-preview-paper"><img id="report-preview" alt="일일 진행사항·소요시간, 예정사항·우선순위·예상시간·진행도와 whoiam 워터마크가 담긴 일일 보고 이미지" ${previewURL ? `src="${previewURL}"` : ''}></div><p class="report-validation" id="report-validation" role="status" aria-live="polite"></p><button class="button button-primary report-download" data-report-action="download">PNG 이미지 저장 <span>↓</span></button><button class="button button-outline report-download" data-report-action="preview">크게 보기</button><p class="report-local-note">시간은 직접 입력한 업무 소요시간의 합계입니다.<br>예상 소요시간과 진행도는 직접 입력한 계획 값입니다.</p></aside></section>`;
   }
 
   function mount() {
@@ -72,7 +67,7 @@
       const key = input.dataset.reportField;
       if (input.dataset.reportGroup) {
         const row = model[input.dataset.reportGroup][Number(input.dataset.reportIndex)];
-        row[key] = key === 'minutes' ? (input.value === '' ? null : Number(input.value)) :
+        row[key] = ['minutes', 'estimated_minutes', 'progress'].includes(key) ? (input.value === '' ? null : Number(input.value)) :
           input.value;
       } else model[key] = input.value;
       document.dispatchEvent(new CustomEvent('whoiam-report-change'));
@@ -123,7 +118,7 @@
     const plannedColumns = [56, 574, 178, 248];
     const daily = prepareRows(model.daily, dailyColumns);
     const planned = prepareRows([...model.planned].sort((a, b) => a.priority.localeCompare(b
-      .priority) || (a.eta || '9999').localeCompare(b.eta || '9999')), plannedColumns);
+      .priority)), plannedColumns);
     setFont(21);
     const noteLines = wrap(ctx, model.note.trim() || '별도 공유사항이 없습니다.', 1000);
     const dailyHeight = Math.max(102, daily.reduce((sum, row) => sum + row.height, 0));
@@ -235,8 +230,8 @@
           pill(`${row.priority} · ${priorityLabels[row.priority]}`, x + 18, y + 26, 122, ...
             colors[row.priority]);
           x += columns[2];
-          etaLines(row.eta).forEach((value, n) => text(value, x + 19, y + 24 + n * 29, n ===
-            0 ? 22 : 19, n === 0 ? 600 : 400, n === 0 ? C.ink : C.muted));
+          text(row.estimated_minutes === null ? '예상 미입력' : `예상 ${row.estimated_minutes}분`, x + 19, y + 24, 20, 600);
+          text(`진행도 ${row.progress}%`, x + 19, y + 53, 19, 400, C.muted);
         } else {
           pill(row.status, x + 17, y + 26, 112, row.status === '완료' ? '#4f7759' : '#a8793e',
             row.status === '완료' ? '#eaf1e5' : '#faf1e3');
@@ -260,7 +255,7 @@
     let y = table(408, '01', '일일 진행사항', daily, dailyColumns, ['#', '진행사항 · 결과', '상태', '소요시간'],
       false);
     y = table(y + 54, '02', '진행 예정사항', planned, plannedColumns, ['#', '예정 업무 · 다음 행동', '우선순위',
-      'ETA · 예상 완료'
+      '예상시간 / 진행도'
     ], true);
     y += 44;
     text('공유·확인사항', 72, y, 23, 650);
@@ -271,7 +266,7 @@
     });
     const footerY = canvas.height - 108;
     line(72, footerY, 1056);
-    text('소요시간: 직접 입력 기준  /  ETA: 예상 완료 시각', 72, footerY + 27, 15, 400, '#8b9983');
+    text('소요시간·예상시간·진행도: 직접 입력 기준', 72, footerY + 27, 15, 400, '#8b9983');
     // 워터마크를 이미지 픽셀에 포함한다.
     const attribution = '오동걸 업무비서 whoiam';
     const versionCredit = `버전 ${REPORT_VERSION} · powered by codex`;
@@ -377,7 +372,8 @@
         title: '',
         detail: '',
         priority: 'P2',
-        eta: ''
+        estimated_minutes: null,
+        progress: 0
       });
       document.dispatchEvent(new CustomEvent('whoiam-report-change'));
       const current = document.getElementById('report-workbench');
@@ -394,7 +390,7 @@
     clearTimeout(timer);
     model.date = value.date || '';
     model.daily = structuredClone(value.daily || []);
-    model.planned = structuredClone(value.planned || []);
+    model.planned = structuredClone(value.planned || []).map(row => ({...row, estimated_minutes: row.estimated_minutes ?? null, progress: row.progress ?? 0}));
     model.note = value.note || '';
     previewURL = '';
   }
