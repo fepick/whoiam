@@ -31,7 +31,18 @@ class Tasks:
     def save(self, data: Json) -> Json:
         fields(
             data,
-            {"id", "title", "detail", "category", "priority", "due", "eta", "status"},
+            {
+                "id",
+                "title",
+                "detail",
+                "category",
+                "priority",
+                "due",
+                "eta",
+                "status",
+                "estimated_minutes",
+                "progress",
+            },
         )
         old = self.tasks.get(data["id"]) if data.get("id") else {}
         merged = {"priority": "P2", "status": "todo", **old, **data}
@@ -49,13 +60,40 @@ class Tasks:
             "priority": choice(merged, "priority", ("P1", "P2", "P3")),
             "due": due,
             "eta": eta,
+            "estimated_minutes": (
+                None
+                if merged.get("estimated_minutes") is None
+                else integer(merged, "estimated_minutes", 0, 525600)
+            ),
+            "progress": integer(
+                {
+                    "progress": old.get(
+                        "progress", 100 if old.get("status") == "done" else 0
+                    ),
+                    **merged,
+                },
+                "progress",
+                0,
+                100,
+            ),
             "status": choice(merged, "status", STATUSES),
             "updated_at": utcnow().isoformat(),
         }
         return self.tasks.put(task)
 
     def log(self, data: Json) -> Json:
-        fields(data, {"task_id", "date", "minutes", "note", "status"})
+        fields(
+            data,
+            {
+                "task_id",
+                "date",
+                "minutes",
+                "note",
+                "status",
+                "progress",
+                "estimated_minutes",
+            },
+        )
         task = self.tasks.get(text(data, "task_id", 64))
         when = day(text(data, "date", 10)).isoformat()
         minutes = integer(data, "minutes", 0, 1440)
@@ -73,6 +111,14 @@ class Tasks:
             )
         note = text(data, "note", 240, False)
         status = choice(data, "status", ("in_progress", "done"))
+        if "progress" in data:
+            task["progress"] = integer(data, "progress", 0, 100)
+        if "estimated_minutes" in data:
+            task["estimated_minutes"] = (
+                None
+                if data["estimated_minutes"] is None
+                else integer(data, "estimated_minutes", 0, 525600)
+            )
         task["status"] = status
         task["updated_at"] = utcnow().isoformat()
         self.tasks.put(task)

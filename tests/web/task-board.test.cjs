@@ -25,6 +25,9 @@ test('분류 필터는 두 보기와 기록 합계에 적용된다', () => {
   assert.match(html, /data-task-card="a"/);
   assert.doesNotMatch(html, /data-task-card="b"|Firmware/);
   assert.match(html, /0시간 30분/);
+  assert.doesNotMatch(html, /data-task-status|<select[^>]*상태/);
+  assert.match(html, /진행도 0%/);
+  assert.match(html, /예상 미입력/);
   vm.runInContext("state.taskMode='list'", context);
   html = vm.runInContext('tasksView()', context);
   assert.match(html, /Board/);
