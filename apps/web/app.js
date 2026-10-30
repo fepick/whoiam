@@ -277,7 +277,7 @@ function commandBox() {
 }
 
 function taskRow(task) {
-  return `<div class="task-row ${task.status==='done'?'done':''}"><button class="task-check" data-action="toggle-task" data-id="${esc(task.id)}" aria-label="${esc(task.title)} 완료 전환" aria-pressed="${task.status==='done'}">${task.status==='done'?icon('check'):''}</button><div class="task-content"><div class="task-title">${esc(task.title)}</div><div class="task-detail">${esc(task.detail)}</div><div class="task-meta"><span class="tag">${esc(task.priority)}</span><span>${esc(task.category)}</span><span>${esc(task.due||'예정일 미정')}</span></div></div><div class="row-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></div>`;
+  return `<div class="task-row ${task.status==='done'?'done':''}"><button class="task-check" data-action="toggle-task" data-id="${esc(task.id)}" aria-label="${esc(task.title)} 완료 전환" aria-pressed="${task.status==='done'}">${task.status==='done'?icon('check'):''}</button><div class="task-content"><div class="task-title">${esc(task.title)}</div><div class="task-detail">${esc(task.detail)}</div><div class="task-meta"><span class="tag">${esc(task.priority)}</span><span>${esc(task.category)}</span><span>${esc(task.due||'예정일 미정')}</span><span>예상 ${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</span><span>진행도 ${esc(task.progress ?? (task.status==='done'?100:0))}%</span></div></div><div class="row-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></div>`;
 }
 
 function weeklyCard() {
@@ -323,14 +323,13 @@ function kanbanCard(task) {
   return `<article class="kanban-card" draggable="true" data-task-card="${esc(task.id)}" aria-label="${esc(task.title)}">
     <div class="kanban-card-top"><span class="tag">${esc(task.priority)}</span><span>${esc(task.category || '미분류')}</span><span class="drag-hint" aria-hidden="true">⠿</span></div>
     <h3>${esc(task.title)}</h3><p class="task-detail">${esc(task.detail)}</p>
-    <div class="kanban-meta"><span>예정일 ${esc(task.due || '미정')}</span><span>ETA ${task.eta?esc(localInput(task.eta).replace('T',' ')):'미정'}</span><strong>오늘 기록 ${duration(minutes)}</strong></div>
-    <label class="kanban-status">상태<select data-task-status="${esc(task.id)}" aria-label="${esc(task.title)} 상태">${['todo','in_progress','done','archived'].map(status=>`<option value="${status}" ${task.status===status?'selected':''}>${labels[status]}</option>`).join('')}</select></label>
+    <div class="kanban-meta"><span>예정일 ${esc(task.due || '미정')}</span><span>예상 ${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</span><span>진행도 ${esc(task.progress ?? (task.status==='done'?100:0))}%</span><strong>오늘 기록 ${duration(minutes)}</strong></div>
     <div class="row-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></article>`;
 }
 
 function kanbanBoard(tasks) {
   const statuses = state.taskTab === 'archived' ? ['todo','in_progress','done','archived'] : ['todo','in_progress','done'];
-  return `<p class="subtle-label">카드를 다른 열로 드래그하거나 카드의 상태 선택으로 이동하세요. 소요시간은 별도로 기록합니다.</p><div class="kanban-board" aria-label="업무 칸반 보드">${statuses.map(status=>{
+  return `<p class="subtle-label">카드를 다른 열로 드래그해 이동하세요. 터치·키보드에서는 수정 버튼을 사용하세요. 소요시간은 별도로 기록합니다.</p><div class="kanban-board" aria-label="업무 칸반 보드">${statuses.map(status=>{
     const cards = tasks.filter(task=>task.status===status);
     return `<section class="kanban-column" data-drop-status="${status}" aria-label="${labels[status]}"><div class="kanban-heading"><h2>${labels[status]}</h2><span class="counter">${cards.length}</span></div><div class="kanban-cards">${cards.map(kanbanCard).join('')||'<p class="kanban-empty">이곳으로 업무를 옮기세요</p>'}</div></section>`;
   }).join('')}</div>`;
@@ -555,6 +554,10 @@ function bomLine() {
   return `<fieldset class="bom-line">${select('소자','item_id',data.items.map(item=>[item.id,item.name]))}${field('보드당 소모 수량','quantity',1,'number','required min="1" step="1"')}${button('remove-line','소자 제거')}</fieldset>`;
 }
 
+function taskEstimateFields(task) {
+  return `${field('예상 소요시간 (분)','estimated_minutes',task.estimated_minutes ?? '', 'number','min="0" max="525600" step="1" placeholder="미입력"')}${field('진행도 (%)','progress',task.progress ?? (task.status==='done'?100:0),'number','required min="0" max="100" step="1"')}<p class="subtle-label">예상시간과 진행도는 직접 입력한 값이며, 상태 이동이나 시간 기록으로 자동 계산하지 않습니다.</p>`;
+}
+
 function showTask(id = '') {
   const t = data.tasks.find(t => t.id === id) || {
     priority: 'P2',
@@ -562,7 +565,7 @@ function showTask(id = '') {
     due: data.today
   };
   showDialog(id ? '업무 수정' : '업무 추가',
-    `${field('업무명','title',t.title,'text','required maxlength="64"')}${area('메모','detail',t.detail)}${field('분류','category',t.category,'text','maxlength="32"')}${select('우선순위','priority',priorities,t.priority)}${field('예정일','due',t.due,'date')}${field('ETA · 예상 완료','eta',localInput(t.eta),'datetime-local')}${select('상태','status',Object.entries(labels).filter(([key])=>['todo','in_progress','done','archived'].includes(key)),t.status)}`,
+    `${field('업무명','title',t.title,'text','required maxlength="64"')}${area('메모','detail',t.detail)}${field('분류','category',t.category,'text','maxlength="32"')}${select('우선순위','priority',priorities,t.priority)}${field('예정일','due',t.due,'date')}${taskEstimateFields(t)}${select('상태','status',Object.entries(labels).filter(([key])=>['todo','in_progress','done','archived'].includes(key)),t.status)}`,
     'task', id);
 }
 
@@ -744,7 +747,7 @@ async function act(action, id) {
   if (action === 'log-task') {
     const task = data.tasks.find(t => t.id === id);
     showDialog(`${task.title} · 소요시간`,
-      `${field('기록 날짜','date',data.today,'date','required')}${field('소요시간 (분)','minutes','','number','required min="0" max="1440" step="1"')}${select('진행 상태','status',[['in_progress','진행 중'],['done','완료']],task.status==='done'?'done':'in_progress')}${area('수행 결과 · 메모','note')}`,
+      `${taskEstimateFields(task)}${field('기록 날짜','date',data.today,'date','required')}${field('소요시간 (분)','minutes','','number','required min="0" max="1440" step="1"')}${select('진행 상태','status',[['in_progress','진행 중'],['done','완료']],task.status==='done'?'done':'in_progress')}${area('수행 결과 · 메모','note')}`,
       'task-log', id);
     return;
   }
@@ -958,13 +961,16 @@ document.addEventListener('submit', async event => {
         ...(id ? {
           id
         } : {}),
-        eta: zoned(values.eta)
+        estimated_minutes: values.estimated_minutes === '' ? null : Number(values.estimated_minutes),
+        progress: Number(values.progress)
       });
     }
     if (type === 'task-log') {
       await run('tasks.log', {
         ...values,
         task_id: id,
+        estimated_minutes: values.estimated_minutes === '' ? null : Number(values.estimated_minutes),
+        progress: Number(values.progress),
         minutes: Number(values.minutes)
       });
     }
@@ -1115,10 +1121,6 @@ document.addEventListener('change', async event => {
   if (input.name === 'task-category') {
     state.taskCategory = input.value;
     render();
-    return;
-  }
-  if (input.dataset.taskStatus) {
-    await moveTask(input.dataset.taskStatus, input.value);
     return;
   }
   if (input.name === 'secret-kind') {
