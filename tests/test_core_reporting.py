@@ -8,6 +8,23 @@ from packages.platform.domain import DomainError, Json, moment
 from packages.platform.storage import EncryptedStore
 
 
+def test_report_preserves_estimate_progress(store: EncryptedStore) -> None:
+    core = Core(store)
+    core.tasks.save(
+        {"title": "가상 예정 업무", "estimated_minutes": 150, "progress": 35}
+    )
+    report = core.reporting.generate("2026-10-30")
+    assert report["planned"][0]["estimated_minutes"] == 150
+    assert report["planned"][0]["progress"] == 35
+    for key, value in (("progress", 101), ("estimated_minutes", -1)):
+        edited = {
+            key: report[key] for key in ("id", "date", "daily", "planned", "note")
+        }
+        edited["planned"] = [{**report["planned"][0], key: value}]
+        with pytest.raises(DomainError):
+            core.reporting.save(edited)
+
+
 def test_start_finish_report_and_idempotency(store: EncryptedStore) -> None:
     now = [moment("2026-10-27T09:00:00+09:00")]
     core = Core(store, lambda: now[0])
