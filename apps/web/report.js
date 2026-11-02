@@ -223,9 +223,9 @@
         x += columns[1];
         if (isPlan) {
           const colors = {
-            P1: ['#a45e3f', '#f8eee6'],
-            P2: ['#4f7759', '#eaf1e5'],
-            P3: ['#7b897f', '#edf0eb']
+            P1: ['#934747', '#fbe4e4'],
+            P2: ['#826315', '#fff2c7'],
+            P3: ['#3f648c', '#e2edfb']
           };
           pill(`${row.priority} · ${priorityLabels[row.priority]}`, x + 18, y + 26, 122, ...
             colors[row.priority]);
