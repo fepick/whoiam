@@ -323,8 +323,8 @@ function kanbanCard(task) {
   return `<article class="kanban-card" draggable="true" data-task-card="${esc(task.id)}" aria-label="${esc(task.title)}">
     <div class="kanban-card-top"><span class="tag">${esc(task.priority)}</span><span>${esc(task.category || '미분류')}</span><span class="drag-hint" aria-hidden="true">⠿</span></div>
     <h3>${esc(task.title)}</h3><p class="task-detail">${esc(task.detail)}</p>
-    <div class="kanban-meta"><span>예정일 ${esc(task.due || '미정')}</span><span>예상 ${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</span><span>진행도 ${esc(task.progress ?? (task.status==='done'?100:0))}%</span><strong>오늘 기록 ${duration(minutes)}</strong></div>
-    <div class="row-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></article>`;
+    <div class="kanban-card-body"><div class="kanban-meta"><span>예정일 ${esc(task.due || '미정')}</span><span>예상 ${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</span><span>진행도 ${esc(task.progress ?? (task.status==='done'?100:0))}%</span><strong>오늘 기록 ${duration(minutes)}</strong></div>
+    <div class="kanban-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></div></article>`;
 }
 
 function kanbanBoard(tasks) {
