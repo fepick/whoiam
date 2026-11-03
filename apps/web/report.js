@@ -51,11 +51,56 @@
     const field = (key, label, input) => `<label class="report-field">${label}${input}</label>`;
     const attrs = key =>
       `data-report-group="${group}" data-report-index="${index}" data-report-field="${key}"`;
-    return `<fieldset class="report-edit-row"><legend>${prefix} ${String(index + 1).padStart(2, '0')}</legend><div class="report-edit-title"><input ${attrs('title')} value="${escape(row.title)}" maxlength="64" aria-label="${prefix} ${index + 1} 업무명" placeholder="업무명"><button type="button" class="report-remove" data-report-action="remove" data-group="${group}" data-index="${index}" aria-label="${prefix} ${index + 1} 삭제">×</button></div><input class="report-detail-input" ${attrs('detail')} value="${escape(row.detail)}" maxlength="2000" aria-label="${prefix} ${index + 1} 상세내용" placeholder="결과나 다음 행동을 짧게 적어주세요"><div class="report-edit-fields">${group === 'daily' ? field('minutes', '소요시간 (분)', `<input type="number" min="0" max="1440" step="1" inputmode="numeric" ${attrs('minutes')} value="${row.minutes === null ? '' : escape(row.minutes)}" aria-label="진행 ${index + 1} 소요시간 (분)" placeholder="미입력">`) + field('status', '진행 상태', `<select ${attrs('status')} aria-label="진행 ${index + 1} 상태">${['완료', '진행 중'].map(value => `<option ${row.status === value ? 'selected' : ''}>${value}</option>`).join('')}</select>`) : field('priority', '우선순위', `<select ${attrs('priority')} aria-label="예정 ${index + 1} 우선순위">${Object.entries(priorityLabels).map(([key, value]) => `<option value="${key}" ${row.priority === key ? 'selected' : ''}>${key} · ${value}</option>`).join('')}</select>`) + field('estimated_minutes', '예상 소요시간 (분)', `<input type="number" min="0" max="525600" step="1" ${attrs('estimated_minutes')} value="${escape(row.estimated_minutes ?? '')}" aria-label="예정 ${index + 1} 예상 소요시간 (분)" placeholder="미입력">`) + field('progress', '진행도 (%)', `<input type="number" min="0" max="100" step="1" required ${attrs('progress')} value="${escape(row.progress)}" aria-label="예정 ${index + 1} 진행도 (%)">`)}</div></fieldset>`;
+    return `<fieldset class="report-edit-row"><legend>${prefix} ${String(index + 1).padStart(2, '0')}</legend><div class="report-edit-title"><input ${attrs('title')} value="${escape(row.title)}" maxlength="64" aria-label="${prefix} ${index + 1} 업무명" placeholder="업무명"><button type="button" class="report-remove" data-report-action="remove" data-group="${group}" data-index="${index}" aria-label="${prefix} ${index + 1} 삭제">×</button></div><textarea class="report-detail-input" ${attrs('detail')} maxlength="2000" rows="2" aria-label="${prefix} ${index + 1} 상세내용" placeholder="결과나 다음 행동을 한 줄에 하나씩 적어주세요">${escape(row.detail)}</textarea><div class="report-edit-fields">${group === 'daily' ? field('minutes', '소요시간 (분)', `<input type="number" min="0" max="1440" step="1" inputmode="numeric" ${attrs('minutes')} value="${row.minutes === null ? '' : escape(row.minutes)}" aria-label="진행 ${index + 1} 소요시간 (분)" placeholder="미입력">`) + field('status', '진행 상태', `<select ${attrs('status')} aria-label="진행 ${index + 1} 상태">${['완료', '진행 중'].map(value => `<option ${row.status === value ? 'selected' : ''}>${value}</option>`).join('')}</select>`) : field('priority', '우선순위', `<select ${attrs('priority')} aria-label="예정 ${index + 1} 우선순위">${Object.entries(priorityLabels).map(([key, value]) => `<option value="${key}" ${row.priority === key ? 'selected' : ''}>${key} · ${value}</option>`).join('')}</select>`) + field('estimated_minutes', '예상 소요시간 (분)', `<input type="number" min="0" max="525600" step="1" ${attrs('estimated_minutes')} value="${escape(row.estimated_minutes ?? '')}" aria-label="예정 ${index + 1} 예상 소요시간 (분)" placeholder="미입력">`) + field('progress', '진행도 (%)', `<input type="number" min="0" max="100" step="1" required ${attrs('progress')} value="${escape(row.progress)}" aria-label="예정 ${index + 1} 진행도 (%)">`)}</div></fieldset>`;
+  }
+
+  function reportMessage() {
+    if (!dateValid(model.date)) return '';
+    const rows = model.daily.filter(row => row.title.trim());
+    if (!rows.length) return '';
+    const [year, month, day] = model.date.split('-');
+    const lines = [`${year.slice(-2)}.${Number(month)}.${Number(day)} 진행 업무 보고드립니다.`];
+    rows.forEach((row, index) => {
+      lines.push(`${index + 1}. ${row.title.trim()}`);
+      for (const detail of (row.detail || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean)) {
+        lines.push(`    - ${detail.replace(/^[-•]\s+/, '')}`);
+      }
+    });
+    return lines.join('\n');
+  }
+
+  function messagePanel() {
+    const message = reportMessage();
+    return `<section class="report-text-message" aria-label="텍스트 업무보고"><div class="card-heading"><h3>텍스트 보고 메시지</h3><button type="button" class="button button-outline" data-report-action="copy-message" ${message?'':'disabled'}>메시지 복사</button></div><textarea id="report-message" readonly rows="12" aria-label="텍스트 업무보고 메시지" spellcheck="false" placeholder="일일 진행사항에 업무를 입력하면 보고 메시지가 생성됩니다.">${escape(message)}</textarea><p class="report-local-note">보고 날짜와 일일 진행사항만 반영합니다.</p><p id="report-copy-status" role="status" aria-live="polite"></p></section>`;
+  }
+
+  function updateMessage() {
+    const message = reportMessage();
+    const output = document.getElementById('report-message');
+    if (output) output.value = message;
+    const button = document.querySelector('[data-report-action="copy-message"]');
+    if (button) button.disabled = !message;
+    const status = document.getElementById('report-copy-status');
+    if (status) status.textContent = '';
+  }
+
+  async function copyMessage() {
+    const message = reportMessage();
+    if (!message) return;
+    const status = document.getElementById('report-copy-status');
+    try {
+      await navigator.clipboard.writeText(message);
+      if (status?.isConnected) status.textContent = '보고 메시지를 복사했습니다.';
+    } catch (error) {
+      const output = document.getElementById('report-message');
+      output?.focus();
+      output?.select();
+      if (status?.isConnected) status.textContent = '선택한 메시지를 Ctrl+C 또는 복사 메뉴로 복사해주세요.';
+    }
   }
 
   function render() {
-    return `<section class="report-workbench" id="report-workbench"><div class="report-editor"><div class="report-editor-heading"><div><div class="eyebrow">ONE-PAGE DAILY REPORT</div><h2>오늘의 일을 한 장에.</h2><p>내용을 바꾸면 오른쪽 이미지에 반영됩니다.</p></div><span class="tag green">PNG</span></div><label class="report-date-label">보고 날짜<input type="date" data-report-field="date" value="${escape(model.date)}" aria-label="보고 날짜"></label><section class="report-edit-section"><div class="card-heading"><h3>01. 일일 진행사항</h3><span class="report-total" id="report-total">합계 ${duration(totalMinutes())}</span></div>${model.daily.map((row, index) => editorRow(row, index, 'daily')).join('')}<button type="button" class="report-add" data-report-action="add" data-group="daily" ${model.daily.length >= MAX_ROWS ? 'disabled' : ''}>＋ 진행사항 추가 <span>최대 ${MAX_ROWS}개</span></button></section><section class="report-edit-section"><div class="card-heading"><h3>02. 진행 예정사항</h3><span class="subtle-label">P1 → P2 → P3</span></div>${model.planned.map((row, index) => editorRow(row, index, 'planned')).join('')}<button type="button" class="report-add" data-report-action="add" data-group="planned" ${model.planned.length >= MAX_ROWS ? 'disabled' : ''}>＋ 예정사항 추가 <span>최대 ${MAX_ROWS}개</span></button></section><label class="report-note-label">공유·확인사항<textarea data-report-field="note" maxlength="240" rows="3" aria-label="공유 및 확인사항">${escape(model.note)}</textarea></label><p class="report-local-note">보고서 저장을 누르면 로컬 암호화 저장소에 보관합니다. 편집 후 저장해주세요.</p></div><aside class="report-image-panel" aria-label="일일 보고 이미지 미리보기"><div class="report-preview-heading"><span>한 장 미리보기</span><span>1200px · PNG</span></div><div class="report-preview-paper"><img id="report-preview" alt="일일 진행사항·소요시간, 예정사항·우선순위·예상시간·진행도와 whoiam 워터마크가 담긴 일일 보고 이미지" ${previewURL ? `src="${previewURL}"` : ''}></div><p class="report-validation" id="report-validation" role="status" aria-live="polite"></p><button class="button button-primary report-download" data-report-action="download">PNG 이미지 저장 <span>↓</span></button><button class="button button-outline report-download" data-report-action="preview">크게 보기</button><p class="report-local-note">시간은 직접 입력한 업무 소요시간의 합계입니다.<br>예상 소요시간과 진행도는 직접 입력한 계획 값입니다.</p></aside></section>`;
+    return `<section class="report-workbench" id="report-workbench"><div class="report-editor"><div class="report-editor-heading"><div><div class="eyebrow">ONE-PAGE DAILY REPORT</div><h2>오늘의 일을 한 장에.</h2><p>내용을 바꾸면 오른쪽 이미지에 반영됩니다.</p></div><span class="tag green">PNG</span></div><label class="report-date-label">보고 날짜<input type="date" data-report-field="date" value="${escape(model.date)}" aria-label="보고 날짜"></label><section class="report-edit-section"><div class="card-heading"><h3>01. 일일 진행사항</h3><span class="report-total" id="report-total">합계 ${duration(totalMinutes())}</span></div>${model.daily.map((row, index) => editorRow(row, index, 'daily')).join('')}<button type="button" class="report-add" data-report-action="add" data-group="daily" ${model.daily.length >= MAX_ROWS ? 'disabled' : ''}>＋ 진행사항 추가 <span>최대 ${MAX_ROWS}개</span></button></section><section class="report-edit-section"><div class="card-heading"><h3>02. 진행 예정사항</h3><span class="subtle-label">P1 → P2 → P3</span></div>${model.planned.map((row, index) => editorRow(row, index, 'planned')).join('')}<button type="button" class="report-add" data-report-action="add" data-group="planned" ${model.planned.length >= MAX_ROWS ? 'disabled' : ''}>＋ 예정사항 추가 <span>최대 ${MAX_ROWS}개</span></button></section><label class="report-note-label">공유·확인사항<textarea data-report-field="note" maxlength="240" rows="3" aria-label="공유 및 확인사항">${escape(model.note)}</textarea></label><p class="report-local-note">보고서 저장을 누르면 로컬 암호화 저장소에 보관합니다. 편집 후 저장해주세요.</p></div><aside class="report-image-panel" aria-label="일일 보고 이미지 미리보기"><div class="report-preview-heading"><span>한 장 미리보기</span><span>1200px · PNG</span></div><div class="report-preview-paper"><img id="report-preview" alt="일일 진행사항·소요시간, 예정사항·우선순위·예상시간·진행도와 whoiam 워터마크가 담긴 일일 보고 이미지" ${previewURL ? `src="${previewURL}"` : ''}></div><p class="report-validation" id="report-validation" role="status" aria-live="polite"></p><button class="button button-primary report-download" data-report-action="download">PNG 이미지 저장 <span>↓</span></button><button class="button button-outline report-download" data-report-action="preview">크게 보기</button><p class="report-local-note">시간은 직접 입력한 업무 소요시간의 합계입니다.<br>예상 소요시간과 진행도는 직접 입력한 계획 값입니다.</p>${messagePanel()}</aside></section>`;
   }
 
   function mount() {
@@ -72,6 +117,7 @@
       } else model[key] = input.value;
       document.dispatchEvent(new CustomEvent('whoiam-report-change'));
       document.getElementById('report-total').textContent = `합계 ${duration(totalMinutes())}`;
+      updateMessage();
       clearTimeout(timer);
       timer = setTimeout(updatePreview, 160);
     });
@@ -358,6 +404,7 @@
     if (!action) return false;
     if (action === 'preview') preview();
     if (action === 'download') download(button);
+    if (action === 'copy-message') copyMessage();
     if (action === 'close-preview') document.getElementById('report-image-dialog')?.close();
     if (action === 'add' || action === 'remove') {
       const group = button.dataset.group;
@@ -411,6 +458,7 @@
     preview,
     handleAction,
     load,
-    getModel
+    getModel,
+    reportMessage
   });
 })();
