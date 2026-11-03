@@ -189,6 +189,10 @@ def create_app(
             backups.safe_backup()
         return {"result": result}
 
+    @app.post("/api/vault/reveal")
+    def credential_reveal(body: Json) -> Json:
+        return core.sensitive.reveal(body, "local-ui", "credential-view")
+
     @app.get("/api/backups")
     def backup_list() -> Json:
         if backups is None:

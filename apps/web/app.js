@@ -49,6 +49,9 @@ const state = {
   busy: false
 };
 let data = null;
+let credentialViewGeneration = 0;
+let credentialViewTimer = null;
+let credentialViewActive = false;
 let connection = {
   locked: true,
   demo: false,
@@ -179,6 +182,7 @@ async function api(path, body) {
 }
 
 function clearPrivateView() {
+  clearCredentialView();
   state.draggedTask = '';
   state.taskCategory = '';
   currentReport = '';
@@ -415,7 +419,7 @@ function recordsView() {
 }
 
 function settingsView() {
-  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div><section class="card wide-card"><div class="card-heading"><h2>보관함 목록</h2><span class="subtle-label">원문 조회는 제공하지 않습니다</span></div>${data.vault.map(entry=>`<div class="timeline-item"><div><strong>${esc(entry.alias)}</strong><small>${esc(entry.kind)} · ${esc(entry.hint)}</small></div>${button('delete-secret','삭제',entry.id)}</div>`).join('')||empty('저장된 민감정보가 없습니다.')}</section>${personalSettings()}`;
+  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div><section class="card wide-card"><div class="card-heading"><h2>보관함 목록</h2><span class="subtle-label">로그인 정보는 30초 동안 보기 가능</span></div>${data.vault.map(entry=>`<div class="timeline-item"><div><strong>${esc(entry.alias)}</strong><small>${esc(entry.kind)} · ${esc(entry.hint)}</small></div><div class="row-actions">${entry.kind==='credential'?button('reveal-secret','보기',entry.id):''}${button('delete-secret','삭제',entry.id)}</div></div>`).join('')||empty('저장된 민감정보가 없습니다.')}</section>${personalSettings()}`;
 }
 
 function personalSettings() {
@@ -514,6 +518,7 @@ function render() {
 }
 
 function navigate(page) {
+  hideCredentialView();
   state.page = navItems.some(row => row[0] === page) ? page : 'home';
   location.hash = state.page;
   render();
@@ -534,16 +539,52 @@ function navigateTarget(target) {
 }
 
 function closeDialog() {
+  clearCredentialView();
   const d = document.getElementById('flow-dialog');
   if (d.open) d.close();
   document.getElementById('dialog-content').innerHTML = '';
 }
 
 function showDialog(title, content, form = '', id = '') {
+  clearCredentialView();
   document.getElementById('dialog-content').innerHTML =
     `<div class="dialog-header"><h2 id="dialog-title">${esc(title)}</h2><button type="button" class="icon-button" data-action="close" aria-label="닫기">${icon('close')}</button></div><div class="dialog-content">${form?`<form data-form="${form}" data-id="${esc(id)}">${content}<p class="form-error" role="alert"></p><div class="dialog-actions">${button('close','취소')}<button type="submit" class="button button-primary">저장</button></div></form>`:content}</div>`;
   const dialog = document.getElementById('flow-dialog');
   if (!dialog.open) dialog.showModal();
+}
+
+function clearCredentialView() {
+  credentialViewGeneration += 1;
+  clearTimeout(credentialViewTimer);
+  credentialViewTimer = null;
+  if (credentialViewActive) document.getElementById('credential-preview')?.replaceChildren();
+  credentialViewActive = false;
+}
+
+function hideCredentialView() {
+  if (credentialViewActive) closeDialog();
+}
+
+async function showCredential(id) {
+  const entry = data?.vault.find(row => row.id === id && row.kind === 'credential');
+  if (!entry || connection.locked) return;
+  showDialog(`${entry.alias} · 로그인 정보`, '<div id="credential-preview"><p>로그인 정보를 불러오고 있습니다.</p></div>');
+  credentialViewActive = true;
+  const generation = credentialViewGeneration;
+  credentialViewTimer = setTimeout(hideCredentialView, 30000);
+  try {
+    const values = await api('vault/reveal', {id});
+    const dialog = document.getElementById('flow-dialog');
+    if (generation !== credentialViewGeneration || !dialog.open || document.hidden || connection.locked) return;
+    const preview = document.getElementById('credential-preview');
+    preview.innerHTML = '<p class="subtle-label">30초 후 자동으로 숨깁니다. 다른 창·탭으로 이동해도 숨깁니다.</p><div class="credential-value"><strong>ID</strong><pre id="credential-username"></pre></div><div class="credential-value"><strong>비밀번호</strong><pre id="credential-password"></pre></div>' + button('close', '지금 숨기기');
+    document.getElementById('credential-username').textContent = values.username;
+    document.getElementById('credential-password').textContent = values.password;
+  } catch (error) {
+    if (generation !== credentialViewGeneration) return;
+    closeDialog();
+    toast(error.message || '로그인 정보를 조회하지 못했습니다.');
+  }
 }
 
 function purchaseLine() {
@@ -854,6 +895,10 @@ async function act(action, id) {
   }
   if (action === 'new-secret') {
     showSecret();
+    return;
+  }
+  if (action === 'reveal-secret') {
+    await showCredential(id);
     return;
   }
   if (action === 'delete-secret') {
@@ -1191,9 +1236,11 @@ document.getElementById('view-toggle').addEventListener('click', () => {
   render();
 });
 document.getElementById('flow-dialog').addEventListener('close', () => {
+  clearCredentialView();
   document.getElementById('dialog-content').innerHTML = '';
 });
 window.addEventListener('hashchange', () => {
+  hideCredentialView();
   const page = location.hash.slice(1);
   if (navItems.some(row => row[0] === page) && page !== state.page) {
     state.page = page;
@@ -1250,6 +1297,9 @@ async function poll() {
 }
 setInterval(poll, 60000);
 document.addEventListener('visibilitychange', () => {
+  if (document.hidden) hideCredentialView();
   if (!document.hidden) poll();
 });
+window.addEventListener('blur', hideCredentialView);
+window.addEventListener('pagehide', hideCredentialView);
 boot();
