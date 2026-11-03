@@ -43,3 +43,15 @@ test('상태 이동은 상태만 저장하고 실패하면 기존 상태를 유�
   await vm.runInContext("moveTask('a','done')", context);
   assert.equal(vm.runInContext('data.tasks[0].status', context),'todo');
 });
+
+test('칸반 보관 버튼은 확인창 없이 보관 상태만 저장한다', async()=>{
+  const context=application();
+  const html=vm.runInContext("kanbanCard(data.tasks[0])",context);
+  assert.match(html,/data-action="archive-task" data-id="a"/);
+  assert.doesNotMatch(vm.runInContext("kanbanCard({...data.tasks[0],status:'archived'})",context),/data-action="archive-task"/);
+  vm.runInContext("render=()=>{};toast=()=>{};run=async(command,payload)=>{globalThis.saved={command,payload};data.tasks[0].status=payload.status;};",context);
+  await vm.runInContext("act('archive-task','a')",context);
+  assert.equal(JSON.stringify(context.saved),JSON.stringify({command:'tasks.save',payload:{id:'a',status:'archived'}}));
+  vm.runInContext("state.taskMode='kanban'",context);
+  assert.doesNotMatch(vm.runInContext('tasksView()',context),/data-task-card="a"/);
+});
