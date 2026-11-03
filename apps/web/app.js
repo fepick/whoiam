@@ -325,7 +325,7 @@ function matchesCategory(task) {
 function kanbanCard(task) {
   const minutes = data.logs.filter(log => log.task_id === task.id).reduce((sum, log) => sum + log.minutes, 0);
   return `<article class="kanban-card" data-priority="${esc(task.priority)}" draggable="true" data-task-card="${esc(task.id)}" aria-label="${esc(task.title)}">
-    <div class="kanban-card-top"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category || '미분류')}</span><span class="drag-hint" aria-hidden="true">⠿</span></div>
+    <div class="kanban-card-top"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category || '미분류')}</span>${task.status!=='archived'?button('archive-task','보관',task.id,'button-archive'):''}<span class="drag-hint" aria-hidden="true">⠿</span></div>
     <h3>${esc(task.title)}</h3><p class="task-detail">${esc(task.detail)}</p>
     <div class="kanban-card-body"><div class="kanban-meta"><span>예정일 ${esc(task.due || '미정')}</span><span>예상 ${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</span><span>진행도 ${esc(task.progress ?? (task.status==='done'?100:0))}%</span><strong>오늘 기록 ${duration(minutes)}</strong></div>
     <div class="kanban-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></div></article>`;
@@ -739,6 +739,10 @@ async function act(action, id) {
     return;
   }
   if (!data) throw new Error('먼저 작업 공간의 잠금을 해제해주세요.');
+  if (action === 'archive-task') {
+    await moveTask(id, 'archived');
+    return;
+  }
   if (action === 'navigate-target') {
     navigateTarget(id);
     return;

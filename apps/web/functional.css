@@ -1,4 +1,5 @@
 /* 실제 입력 화면도 좁은 장치 화면에서 한 열로 배치한다. */
+.kanban-card-top .button-archive{margin-left:auto;padding:3px 7px;min-height:26px;font-size:10px;white-space:nowrap}.kanban-card-top .button-archive+.drag-hint{margin-left:0}
 .credential-value{margin:18px 0}.credential-value pre{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;font:14px/1.6 monospace;background:#f0f4eb;border:1px solid #dce4d7;border-radius:8px;padding:12px;margin-top:6px}
 .priority-tag[data-priority=P1]{background:#fbe4e4;color:#934747}.priority-tag[data-priority=P2]{background:#fff2c7;color:#826315}.priority-tag[data-priority=P3]{background:#e2edfb;color:#3f648c}.kanban-card[data-priority=P1]{border-left:3px solid #e6aaaa}.kanban-card[data-priority=P2]{border-left:3px solid #e8d17f}.kanban-card[data-priority=P3]{border-left:3px solid #a8c5e9}
 .kanban-card-body{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;margin-top:10px}.kanban-card-body .kanban-meta{margin:0;gap:4px;overflow-wrap:anywhere}.kanban-actions{display:grid;gap:6px}.kanban-actions .button{padding:7px 9px;font-size:11px;min-height:32px;white-space:nowrap}
