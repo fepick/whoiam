@@ -17,7 +17,7 @@ function application() {
   const context = vm.createContext({
     document: {addEventListener() {}, getElementById: element},
     window: {addEventListener() {}}, location: {hash: ''},
-    URLSearchParams, setInterval() {},
+    URLSearchParams, setInterval() {}, clearTimeout() {},
     fetch: () => new Promise(() => {}),
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../../apps/web/app.js'), 'utf8'), context);

@@ -98,6 +98,21 @@ class Sensitive:
         self.record_audit("entry.use", reference)
         return self.entries.get(reference)["values"]
 
+    def reveal(self, data: Json, actor: str, purpose: str) -> Json:
+        if actor != "local-ui" or purpose != "credential-view":
+            raise DomainError("이 목적의 원문 접근 권한이 없습니다.", 403)
+        fields(data, {"id"})
+        identifier = text(data, "id", 64)
+        with self.store.transaction():
+            entry = self.entries.get(identifier)
+            if entry["kind"] != "credential":
+                raise DomainError("로그인 정보만 일시 조회할 수 있습니다.", 403)
+            self.record_audit("credential.reveal", identifier)
+            return {
+                "username": entry["values"]["username"],
+                "password": entry["values"]["password"],
+            }
+
     def upload(self, data: Json) -> Json:
         fields(data, {"name", "content", "kind"})
         kind = choice(data, "kind", ("statement", "card-receipt", "payroll"))

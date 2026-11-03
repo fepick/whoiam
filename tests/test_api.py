@@ -7,6 +7,59 @@ from packages.platform.domain import moment
 from packages.platform.storage import EncryptedStore
 
 
+def test_credential_reveal_requires_session_csrf_and_unlocked_store(
+    store: EncryptedStore,
+) -> None:
+    app = create_app(store)
+    core = app.state.core
+    entry = core.sensitive.save(
+        {
+            "kind": "credential",
+            "alias": "가상 로그인",
+            "username": "fake@example.invalid",
+            "password": "synthetic-only-password",
+        }
+    )
+    body = {"id": entry["id"]}
+    with TestClient(app, base_url="http://127.0.0.1:4173") as client:
+        assert client.post("/api/vault/reveal", json=body).status_code == 401
+        client.post(
+            "/api/session",
+            json={"token": app.state.bootstrap},
+            headers={"origin": "http://127.0.0.1:4173"},
+        )
+        csrf = client.get("/api/status").json()["csrf"]
+        headers = {"origin": "http://127.0.0.1:4173", "x-whoiam-csrf": csrf}
+        assert client.post("/api/vault/reveal", json=body).status_code == 403
+        assert (
+            client.post(
+                "/api/vault/reveal",
+                json=body,
+                headers={**headers, "origin": "https://example.invalid"},
+            ).status_code
+            == 403
+        )
+        assert client.get("/api/vault/reveal").status_code == 404
+        response = client.post("/api/vault/reveal", json=body, headers=headers)
+        assert response.status_code == 200
+        assert response.json()["password"] == "synthetic-only-password"
+        assert response.headers["cache-control"] == "no-store"
+        assert "synthetic-only-password" not in client.get("/api/snapshot").text
+        assert "synthetic-only-password" not in str(core.sensitive.audit.all())
+        bad = client.post(
+            "/api/vault/reveal",
+            json={**body, "purpose": "synthetic-only-password"},
+            headers=headers,
+        )
+        assert bad.status_code == 400
+        assert "synthetic-only-password" not in bad.text
+        store.lock()
+        assert (
+            client.post("/api/vault/reveal", json=body, headers=headers).status_code
+            == 423
+        )
+
+
 def test_local_auth_csrf_lock_and_redacted_validation(store: EncryptedStore) -> None:
     app = create_app(store)
     with TestClient(app, base_url="http://127.0.0.1:4173") as client:
