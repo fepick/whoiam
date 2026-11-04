@@ -6,6 +6,7 @@ Windows 10/11 · Python 3.11 이상을 기준으로 합니다. 현재 사용자 
 ## 파일 준비
 
 검증된 `whoiam-0.04.zip`을 받았다면 원하는 폴더에 압축을 풉니다. 기존 `.venv`나 운영 데이터는 복사하지 않습니다.
+ZIP과 함께 받은 `.sha256`의 해시와 `Get-FileHash .\whoiam-0.04.zip -Algorithm SHA256` 결과를 대조할 수 있습니다.
 Git으로 설치할 때는 접근 권한이 있는 계정으로 다음을 실행합니다. GitHub 로그인은 직접 진행하고 비밀번호·토큰을 AI에게 보내지 않습니다.
 
 ```powershell
