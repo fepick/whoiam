@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const MAX_ROWS = 100;
-  const REPORT_VERSION = '0.03';
+  const REPORT_VERSION = '0.04';
   const model = {
     date: '',
     daily: [],
@@ -314,7 +314,7 @@
     line(72, footerY, 1056);
     text('소요시간·예상시간·진행도: 직접 입력 기준', 72, footerY + 27, 15, 400, '#8b9983');
     // 워터마크를 이미지 픽셀에 포함한다.
-    const attribution = '오동걸 업무비서 whoiam';
+    const attribution = '업무비서 whoiam';
     const versionCredit = `버전 ${REPORT_VERSION} · powered by codex`;
     setFont(14, 500);
     text(attribution, 1128 - ctx.measureText(attribution).width, footerY + 24, 14, 500,
