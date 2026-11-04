@@ -7,7 +7,7 @@ $blocked = @(
     'data/fake.json', 'nested/backups/fake.bin', 'uploads/fake.pdf', 'sessions/fake.json',
     '.env', '.env.local', 'apps/api/.env.production', '.env.EXAMPLE', 'fake.pem', 'fake.pfx',
     'fake.key', 'id_ed25519', 'database.db', 'database.sqlite3-wal', 'fake.har', 'fake.zip',
-    'fake.dump', 'export.sql', '.\credentials\fake.json'
+    'fake.dump', 'export.sql', '.\credentials\fake.json', 'fake.whoiam-recovery'
 )
 $allowed = @(
     'README.md', 'docs/security.md', 'packages/modules/sensitive/README.md',

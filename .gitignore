@@ -22,6 +22,7 @@ storage-state/
 *.pfx
 *.keystore
 *.jks
+*.whoiam-recovery
 id_rsa
 id_ed25519
 *.db
@@ -45,6 +46,7 @@ id_ed25519
 node_modules/
 .venv/
 __pycache__/
+.pytest_cache/
 dist/
 build/
 coverage/

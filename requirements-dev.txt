@@ -1,0 +1,6 @@
+-r requirements.txt
+pre-commit==4.7.0
+isort==7.0.0
+black==26.10.1
+pytest>=8,<10
+httpx==0.28.1

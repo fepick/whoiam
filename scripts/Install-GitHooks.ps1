@@ -19,4 +19,4 @@ if ($env:OS -ne 'Windows_NT') {
 
 & git -C $repositoryRoot config --local core.hooksPath .githooks
 if ($LASTEXITCODE -ne 0) { throw 'Could not install the local hooks.' }
-Write-Output 'Local pre-commit and pre-push path checks installed. These do not scan file contents.'
+Write-Output 'Local hooks installed: sensitive path checks and pre-commit run --all-files. Install requirements-dev.txt in the active Python environment. Path checks do not scan file contents.'

@@ -1,0 +1,16 @@
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+force-exclude = '(^|/)(gas_detector/dev|\.private|\.tmp)/'
+
+[tool.isort]
+profile = "black"
+line_length = 88
+py_version = 311
+extend_skip = ["gas_detector/dev", ".private", ".tmp"]
+skip_gitignore = true
+filter_files = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".private", ".tmp"]
