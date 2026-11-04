@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const MAX_ROWS = 100;
-  const REPORT_VERSION = '0.03';
+  const REPORT_VERSION = '0.04';
   const model = {
     date: '',
     daily: [],
