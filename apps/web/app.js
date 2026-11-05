@@ -636,7 +636,7 @@ function bomLine() {
 }
 
 function taskEstimateFields(task) {
-  return `${field('예상 소요시간 (분)','estimated_minutes',task.estimated_minutes ?? '', 'number','min="0" max="525600" step="1" placeholder="미입력"')}${field('진행도 (%)','progress',task.progress ?? (task.status==='done'?100:0),'number','required min="0" max="100" step="1"')}<p class="subtle-label">예상시간과 진행도는 직접 입력한 값이며, 상태 이동이나 시간 기록으로 자동 계산하지 않습니다.</p>`;
+  return `${field('예상 소요시간 (분)','estimated_minutes',task.estimated_minutes ?? '', 'text','inputmode="numeric" pattern="[0-9]{1,6}" maxlength="6" placeholder="미입력"')}${field('진행도 (%)','progress',task.progress ?? (task.status==='done'?100:0),'text','required inputmode="numeric" pattern="(100|[0-9]{1,2})" maxlength="3"')}<p class="subtle-label">예상시간은 0~525600분, 진행도는 0~100%입니다. 직접 입력하며 상태 이동이나 시간 기록으로 자동 계산하지 않습니다.</p>`;
 }
 
 function showTask(id = '') {
