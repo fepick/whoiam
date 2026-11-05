@@ -365,12 +365,18 @@ function taskFilterControls() {
 }
 
 function kanbanCard(task) {
-  const minutes = data.logs.filter(log => log.task_id === task.id).reduce((sum, log) => sum + log.minutes, 0);
   return `<article class="kanban-card" data-priority="${esc(task.priority)}" draggable="true" data-task-card="${esc(task.id)}" aria-label="${esc(task.title)}">
-    <div class="kanban-card-top"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category || '미분류')}</span>${task.status!=='archived'?button('archive-task','보관',task.id,'button-archive'):''}<span class="drag-hint" aria-hidden="true">⠿</span></div>
-    <h3>${esc(task.title)}</h3><p class="task-detail">${esc(task.detail)}</p>
-    <div class="kanban-card-body"><div class="kanban-meta"><span>예정일 ${esc(task.due || '미정')}</span><span>예상 ${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</span><span>진행도 ${esc(task.progress ?? (task.status==='done'?100:0))}%</span><strong>오늘 기록 ${duration(minutes)}</strong></div>
-    <div class="kanban-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></div></article>`;
+    <div class="kanban-card-top"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category || '미분류')}</span></div>
+    <h3>${esc(task.title)}</h3>
+    <div class="kanban-actions">${task.status!=='archived'?button('archive-task','보관',task.id):''}${button('log-task','기록',task.id)}${button('edit-task','수정',task.id)}${button('task-detail','내용',task.id)}</div></article>`;
+}
+
+function showTaskDetail(id) {
+  const task = data.tasks.find(task => task.id === id);
+  if (!task) throw new Error('업무를 찾을 수 없습니다.');
+  const minutes = data.logs.filter(log => log.task_id === id).reduce((sum, log) => sum + log.minutes, 0);
+  showDialog(task.title,
+    `<div class="task-preview-meta"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category || '미분류')}</span><span>${esc(labels[task.status])}</span></div><h3>메모</h3><div class="task-preview-detail">${taskDetailLines(task.detail)||'<p class="subtle-label">메모가 없습니다.</p>'}</div><dl class="task-preview-facts"><div><dt>예정일</dt><dd>${esc(task.due || '미정')}</dd></div><div><dt>예상 소요시간</dt><dd>${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</dd></div><div><dt>진행도</dt><dd>${esc(task.progress ?? (task.status==='done'?100:0))}%</dd></div><div><dt>오늘 기록</dt><dd>${duration(minutes)}</dd></div></dl>${button('close','닫기')}`);
 }
 
 function kanbanBoard(tasks) {
@@ -822,6 +828,10 @@ async function act(action, id) {
   }
   if (action === 'archive-task') {
     await moveTask(id, 'archived');
+    return;
+  }
+  if (action === 'task-detail') {
+    showTaskDetail(id);
     return;
   }
   if (action === 'navigate-target') {

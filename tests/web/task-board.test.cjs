@@ -35,8 +35,8 @@ test('분류 필터는 두 보기와 기록 합계에 적용된다', () => {
   assert.doesNotMatch(html, /data-task-card="b"|Firmware/);
   assert.match(html, /0시간 30분/);
   assert.doesNotMatch(html, /data-task-status|<select[^>]*상태/);
-  assert.match(html, /진행도 0%/);
-  assert.match(html, /예상 미입력/);
+  assert.doesNotMatch(html, /진행도 0%|예상 미입력|kanban-meta/);
+  assert.match(html, /data-action="task-detail"/);
   vm.runInContext("state.taskMode='list'", context);
   html = vm.runInContext('tasksView()', context);
   assert.match(html, /Board/);
@@ -108,4 +108,23 @@ test('칸반 보관 버튼은 확인창 없이 보관 상태만 저장한다', a
   assert.equal(JSON.stringify(context.saved),JSON.stringify({command:'tasks.save',payload:{id:'a',status:'archived'}}));
   vm.runInContext("state.taskMode='kanban'",context);
   assert.doesNotMatch(vm.runInContext('tasksView()',context),/data-task-card="a"/);
+});
+
+test('칸반은 제목·분류·우선순위·네 버튼만 표시하고 내용 팝업에서 상세를 보여준다',async()=>{
+  const context=application();
+  vm.runInContext("Object.assign(data.tasks[0],{detail:'메모 첫 줄\\n<script>fake</script>',due:'2026-11-06',estimated_minutes:120,progress:45})",context);
+  const card=vm.runInContext('kanbanCard(data.tasks[0])',context);
+  assert.match(card,/Board/);
+  assert.match(card,/HW/);
+  for(const action of ['archive-task','log-task','edit-task','task-detail']) assert.match(card,new RegExp(`data-action="${action}"`));
+  assert.equal((card.match(/<button /g)||[]).length,4);
+  assert.doesNotMatch(card,/메모 첫 줄|2026-11-06|120분|45%|오늘 기록/);
+  vm.runInContext('showDialog=(title,content)=>{globalThis.preview={title,content};}',context);
+  await vm.runInContext("act('task-detail','a')",context);
+  assert.equal(context.preview.title,'Board');
+  assert.match(context.preview.content,/<li>메모 첫 줄<\/li>/);
+  assert.match(context.preview.content,/2026-11-06|120분|45%/);
+  assert.match(context.preview.content,/0시간 30분/);
+  assert.match(context.preview.content,/&lt;script&gt;fake&lt;\/script&gt;/);
+  assert.doesNotMatch(context.preview.content,/<script>/);
 });
