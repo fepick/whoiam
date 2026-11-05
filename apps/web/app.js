@@ -445,7 +445,7 @@ function materialsView() {
 
 function timeView() {
   const a = data.attendance;
-  return `<div class="records-grid">${weeklyCard()}<section class="card"><div class="card-heading"><h2>오늘의 근무</h2><span>${duration(a.today_minutes)}</span></div><div class="week-bars">${a.daily.map((row,index)=>`<div class="week-bar ${row.date===data.today?'current':''}"><span class="bar-label">${(row.minutes/60).toFixed(1)}h</span><div class="bar" style="height:${Math.min(100,row.minutes/720*100)}%"></div></div>`).join('')}</div><div class="week-days">${['월','화','수','목','금','토','일'].map(label=>`<span>${label}</span>`).join('')}</div><div class="row-actions">${button('manual-time','근무 수동 입력')}${button('attendance-history','변경 이력')}${button('payroll','급여 대조')}</div></section></div><section class="card wide-card"><div class="card-heading"><h2>출퇴근 기록</h2><span class="subtle-label">휴게는 명시적으로 입력한 구간만 차감</span></div>${data.sessions.map(session=>`<div class="timeline-item"><div><strong>${esc(localTime(session.start))} → ${session.end?esc(localTime(session.end)):'근무 중'}</strong><small>${session.source==='manual'||session.corrections.length?'수동 입력':'출퇴근 기록'} · 휴게 ${session.breaks.length}구간 · 정정 ${session.corrections.length}회</small></div>${button('correct-time','정정',session.id)}</div>`).join('')||empty('출근을 기록하면 이곳에 표시됩니다.')}</section><section class="card wide-card"><div class="card-heading"><h2>급여 입금 대조</h2>${button('payroll','월별 입력')}</div>${data.payroll.map(row=>`<div class="timeline-item"><span>${esc(row.month)}</span><div><strong>예상 ${money(row.expected_net)} / 입금 ${row.received_net===null?'미확인':money(row.received_net)}</strong><small>${row.difference===null?'입금 확인 대기':`차이 ${money(row.difference)}`} · ${esc(row.note)}</small></div>${button('payroll','수정',row.month)}</div>`).join('')||empty('예상 실수령액과 실제 입금액을 직접 입력해 비교하세요.')}</section>`;
+  return `<div class="records-grid">${weeklyCard()}<section class="card"><div class="card-heading"><h2>오늘의 근무</h2><span>${duration(a.today_minutes)}</span></div><div class="week-bars">${a.daily.map((row,index)=>`<div class="week-bar ${row.date===data.today?'current':''}"><span class="bar-label">${(row.minutes/60).toFixed(1)}h</span><div class="bar" style="height:${Math.min(100,row.minutes/720*100)}%"></div></div>`).join('')}</div><div class="week-days">${['월','화','수','목','금','토','일'].map(label=>`<span>${label}</span>`).join('')}</div><div class="row-actions">${button('manual-time','근무 수동 입력')}${button('attendance-history','변경 이력')}${button('payroll','급여 대조')}</div></section></div><section class="card wide-card"><div class="card-heading"><h2>출퇴근 기록</h2><span class="subtle-label">${data.attendance_rules?.enabled?'설정한 제외 구간과 직접 입력한 휴게를 합쳐 차감':'휴게는 명시적으로 입력한 구간만 차감'}</span></div>${data.sessions.map(session=>`<div class="timeline-item"><div><strong>${esc(localTime(session.start))} → ${session.end?esc(localTime(session.end)):'근무 중'}</strong><small>${session.source==='manual'?'수동 입력':'출퇴근 기록'} · ${session.overtime?'야근':'일반'} · 휴게 ${session.breaks.length}구간 · 정정 ${session.corrections.length}회</small></div><div class="row-actions">${button('toggle-overtime',session.overtime?'야근 해제':'야근 지정',session.id)}${button('correct-time','정정',session.id)}</div></div>`).join('')||empty('출근을 기록하면 이곳에 표시됩니다.')}</section><section class="card wide-card"><div class="card-heading"><h2>급여 입금 대조</h2>${button('payroll','월별 입력')}</div>${data.payroll.map(row=>`<div class="timeline-item"><span>${esc(row.month)}</span><div><strong>예상 ${money(row.expected_net)} / 입금 ${row.received_net===null?'미확인':money(row.received_net)}</strong><small>${row.difference===null?'입금 확인 대기':`차이 ${money(row.difference)}`} · ${esc(row.note)}</small></div>${button('payroll','수정',row.month)}</div>`).join('')||empty('예상 실수령액과 실제 입금액을 직접 입력해 비교하세요.')}</section>`;
 }
 
 function reportView() {
@@ -496,8 +496,15 @@ document.addEventListener('change', event => {
   document.getElementById('vault-results').innerHTML = vaultResults();
 });
 
+function attendanceRulesSettings() {
+  const rules = data.attendance_rules || {};
+  const toggle = (label,key,fallback=true) => select(label,key,[['true','적용'],['false','적용 안 함']],String(rules[key] ?? fallback));
+  const clock = (label,key,fallback) => field(label,key,rules[key] || fallback,'text','required inputmode="numeric" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="5" placeholder="HH:MM"');
+  return `<section class="card wide-card"><div class="card-heading"><h2>근무시간 기록 기본설정</h2></div><form data-form="attendance-rules"><p class="subtle-label">출퇴근 원본 시각은 보존하고 합계에서만 제외합니다. 저장하면 기존 출퇴근 기록의 일·주간 합계와 새로 생성하는 보고서의 근무시간에도 적용합니다. 이미 저장한 보고서는 자동 변경하지 않습니다.</p>${toggle('산정 규칙 사용','enabled',false)}<div class="attendance-rule-grid"><fieldset><legend>이른 출근</legend>${toggle('기준 시각 이전 제외','early_enabled')}${clock('근무 인정 시작 (24시간제)','earliest_start','08:00')}</fieldset><fieldset><legend>고정 휴게</legend>${toggle('고정 휴게 제외','lunch_enabled')}${clock('휴게 시작','lunch_start','12:00')}${clock('휴게 종료','lunch_end','13:00')}</fieldset><fieldset><legend>퇴근 준비</legend>${toggle('퇴근 준비시간 제외','preparation_enabled')}${clock('준비 시작','preparation_start','17:00')}${clock('준비 종료','preparation_end','17:30')}<p class="subtle-label">야근으로 지정한 기록에서는 이 구간을 근무시간으로 인정합니다. 직접 기록한 휴게는 계속 차감합니다.</p></fieldset></div><p class="subtle-label">고정 제외와 수동 휴게가 겹쳐도 한 번만 차감합니다. 기본은 규칙 미적용입니다.</p><div class="row-actions">${button('attendance-rules-preset','사내 기준 채우기')}<button class="button button-primary" type="submit">근무 기본설정 저장</button></div></form></section>`;
+}
+
 function settingsView() {
-  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${field('자동 잠금 대기 시간 (분)','idle_minutes',data.settings.idle_minutes ?? 15,'number','min="1" max="240" step="1" required')}<p class="subtle-label">1~240분 · 기본 15분 · 조회 자동 갱신은 대기 시간을 연장하지 않습니다.</p>${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div>${vaultView()}${personalSettings()}`;
+  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${field('자동 잠금 대기 시간 (분)','idle_minutes',data.settings.idle_minutes ?? 15,'number','min="1" max="240" step="1" required')}<p class="subtle-label">1~240분 · 기본 15분 · 조회 자동 갱신은 대기 시간을 연장하지 않습니다.</p>${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div>${attendanceRulesSettings()}${vaultView()}${personalSettings()}`;
 }
 
 function personalSettings() {
@@ -701,9 +708,9 @@ function showOrder(id) {
 
 function showTime(id = '', version = null) {
   const session = version || data.sessions.find(s => s.id === id);
-  const breaks = session ? session.breaks : [defaultLunch(data.today)];
+  const breaks = session ? session.breaks : data.attendance_rules?.enabled ? [] : [defaultLunch(data.today)];
   showDialog(version ? '이력으로 근무 다시 입력' : id ? '근무 기록 정정' : '근무 수동 입력',
-    `<p class="subtle-label">수동 입력이 우선합니다. 겹치는 기존 근무 기록 전체는 이력으로 보관하고 지금 입력한 근무·휴게로 대체합니다. 기본 휴게는 12:00~13:00이며 출퇴근에 걸쳐도 근무와 겹치는 시간만 차감합니다. 아직 지나지 않은 퇴근 예정 시각은 저장할 수 없습니다.</p>${field('출근 시각 (한국 시간)','session_start',localInput(session?.start),'datetime-local','required')}${field('퇴근 시각 (한국 시간)','session_end',localInput(session?.end),'datetime-local','required')}<p id="manual-time-preview" class="subtle-label" role="status" aria-live="polite">${esc(manualTimeSummary(localInput(session?.start),localInput(session?.end),id))}</p><div id="manual-breaks">${breaks.map(interval=>breakLine(interval,!session)).join('')}</div>${button('add-break','휴게 구간 추가')}${area('입력·정정 사유','reason',version?'이력에서 다시 입력':'')}`,
+    `<p class="subtle-label">수동 입력이 우선합니다. 겹치는 기존 근무 기록 전체는 이력으로 보관하고 지금 입력한 근무·휴게로 대체합니다. ${data.attendance_rules?.enabled?'설정된 산정 규칙을 합계에 적용합니다. 추가 휴게만 아래에 입력하세요.':'기본 휴게는 12:00~13:00이며 출퇴근에 걸쳐도 근무와 겹치는 시간만 차감합니다.'} 아직 지나지 않은 퇴근 예정 시각은 저장할 수 없습니다.</p>${field('출근 시각 (한국 시간)','session_start',localInput(session?.start),'datetime-local','required')}${field('퇴근 시각 (한국 시간)','session_end',localInput(session?.end),'datetime-local','required')}<p id="manual-time-preview" class="subtle-label" role="status" aria-live="polite">${esc(manualTimeSummary(localInput(session?.start),localInput(session?.end),id))}</p><div id="manual-breaks">${breaks.map(interval=>breakLine(interval,!session)).join('')}</div>${button('add-break','휴게 구간 추가')}${select('야근 여부','overtime',[['false','일반 근무'],['true','야근 · 퇴근 준비시간 인정']],String(session?.overtime || false))}${area('입력·정정 사유','reason',version?'이력에서 다시 입력':'')}`,
     'time', id);
 }
 
@@ -826,6 +833,18 @@ async function act(action, id) {
     document.getElementById('vault-results').innerHTML = vaultResults();
     return;
   }
+  if (action === 'attendance-rules-preset') {
+    const form = document.querySelector('[data-form="attendance-rules"]');
+    const preset = {enabled:'true',early_enabled:'true',earliest_start:'08:00',lunch_enabled:'true',lunch_start:'12:00',lunch_end:'13:00',preparation_enabled:'true',preparation_start:'17:00',preparation_end:'17:30'};
+    Object.entries(preset).forEach(([key,value]) => {form.elements.namedItem(key).value=value;});
+    return;
+  }
+  if (action === 'toggle-overtime') {
+    const session = data.sessions.find(row => row.id === id);
+    await run('attendance.overtime', {id, overtime:!session.overtime});
+    render();
+    return;
+  }
   if (action === 'archive-task') {
     await moveTask(id, 'archived');
     return;
@@ -848,11 +867,14 @@ async function act(action, id) {
   }
   if (action === 'finish') {
     showDialog('퇴근 전 확인',
-      `<p>오늘 근무 ${duration(data.attendance.today_minutes)} · 주간 ${duration(data.attendance.week_minutes)}</p>${alertList()}<p>퇴근 시 실제 기록으로 일일 업무보고 초안을 생성합니다.</p>${button('confirm-finish','퇴근 기록·보고서 생성','','button-primary')}${button('close','돌아가기')}`
+      `<p>오늘 근무 ${duration(data.attendance.today_minutes)} · 주간 ${duration(data.attendance.week_minutes)}</p>${alertList()}${select('이 근무 기록의 야근 여부','finish-overtime',[['false','일반 근무'],['true','야근 · 퇴근 준비시간 인정']],String(data.attendance.active?.overtime || false))}<p>퇴근 시 실제 기록으로 일일 업무보고 초안을 생성합니다.</p>${button('confirm-finish','퇴근 기록·보고서 생성','','button-primary')}${button('close','돌아가기')}`
     );
     return;
   }
   if (action === 'confirm-finish') {
+    const active = data.attendance.active;
+    const overtime = document.querySelector('[name="finish-overtime"]')?.value === 'true';
+    if (active && Boolean(active.overtime) !== overtime) await run('attendance.overtime', {id:active.id,overtime});
     const result = await run('core.finish');
     closeDialog();
     if (result.report) {
@@ -1212,6 +1234,7 @@ document.addEventListener('submit', async event => {
         start: zoned(start),
         end: zoned(end),
         breaks,
+        overtime: values.overtime === 'true',
         reason
       });
       closeDialog();
@@ -1231,6 +1254,14 @@ document.addEventListener('submit', async event => {
     if (type === 'secret') {
       delete values['secret-kind'];
       await run('sensitive.save', values);
+    }
+    if (type === 'attendance-rules') {
+      const rules = {...values};
+      for (const key of ['enabled','early_enabled','lunch_enabled','preparation_enabled']) rules[key] = values[key] === 'true';
+      await run('attendance.rules', rules);
+      render();
+      toast('근무시간 산정 기준을 저장했습니다. 기존 기록 합계에도 적용됩니다.');
+      return;
     }
     if (type === 'settings') {
       await run('core.settings', {

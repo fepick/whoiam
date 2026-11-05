@@ -31,3 +31,6 @@ dialog{max-height:calc(100dvh / var(--ui-scale) - 32px)}
 .task-detail-lines li {padding-left:2px}
 .task-detail-lines li::marker {font-size:0.8em}
 .task-row .task-detail {display:block; margin-left:0}
+.attendance-rule-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:20px 0}
+.attendance-rule-grid fieldset{min-width:0;border:1px solid #dce4d7;border-radius:10px;padding:12px 16px}
+.attendance-rule-grid legend{font-weight:600;padding:0 6px}
