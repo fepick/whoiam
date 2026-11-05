@@ -22,3 +22,7 @@ dialog{max-height:calc(100dvh / var(--ui-scale) - 32px)}
 .vault-row small {display:block; color:var(--muted, #697586); font-size:12px; margin-top:3px}
 .vault-row .row-actions {flex-shrink:0}
 .vault-pagination {display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding-top:12px; font-size:12px}
+.task-detail-lines {margin:0; padding-left:16px; white-space:normal; overflow-wrap:anywhere; list-style:disc}
+.task-detail-lines li {padding-left:2px}
+.task-detail-lines li::marker {font-size:0.8em}
+.task-row .task-detail {display:block; margin-left:0}

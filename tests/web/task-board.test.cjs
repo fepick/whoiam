@@ -18,6 +18,15 @@ function application() {
   return context;
 }
 
+test('리스트 메모는 입력 줄마다 점 목록으로 구분하고 HTML을 이스케이프한다',()=>{
+  const context=application();
+  context.detail='첫 줄\r\n\n- 둘째 줄\n• 셋째 줄\n<script>fake</script>';
+  const html=vm.runInContext('taskRow({...data.tasks[0],detail})',context);
+  assert.match(html,/<ul class="task-detail-lines"><li>첫 줄<\/li><li>둘째 줄<\/li><li>셋째 줄<\/li><li>&lt;script&gt;fake&lt;\/script&gt;<\/li><\/ul>/);
+  assert.doesNotMatch(html,/<script>/);
+  assert.equal(vm.runInContext("taskDetailLines('  \\n ')",context),'');
+});
+
 test('분류 필터는 두 보기와 기록 합계에 적용된다', () => {
   const context = application();
   vm.runInContext("state.taskCategory='category:HW'; state.taskMode='kanban';", context);

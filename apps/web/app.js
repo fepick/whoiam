@@ -286,8 +286,13 @@ function commandBox() {
   return `<form class="command-box" id="command-form"><span class="command-symbol">${icon('command')}</span><input name="command" required maxlength="100" aria-label="명령" placeholder="출근, 퇴근, 오늘 할 일, 재고, 배송, 보고" autocomplete="off"><button class="icon-button" type="submit" aria-label="명령 실행">${icon('arrow')}</button></form>`;
 }
 
+function taskDetailLines(value) {
+  const lines = String(value || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  return lines.length ? `<ul class="task-detail-lines">${lines.map(line => `<li>${esc(line.replace(/^[-•]\s+/, ''))}</li>`).join('')}</ul>` : '';
+}
+
 function taskRow(task) {
-  return `<div class="task-row ${task.status==='done'?'done':''}"><button class="task-check" data-action="toggle-task" data-id="${esc(task.id)}" aria-label="${esc(task.title)} 완료 전환" aria-pressed="${task.status==='done'}">${task.status==='done'?icon('check'):''}</button><div class="task-content"><div class="task-title">${esc(task.title)}</div><div class="task-detail">${esc(task.detail)}</div><div class="task-meta"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category)}</span><span>${esc(task.due||'예정일 미정')}</span><span>예상 ${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</span><span>진행도 ${esc(task.progress ?? (task.status==='done'?100:0))}%</span></div></div><div class="row-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></div>`;
+  return `<div class="task-row ${task.status==='done'?'done':''}"><button class="task-check" data-action="toggle-task" data-id="${esc(task.id)}" aria-label="${esc(task.title)} 완료 전환" aria-pressed="${task.status==='done'}">${task.status==='done'?icon('check'):''}</button><div class="task-content"><div class="task-title">${esc(task.title)}</div><div class="task-detail">${taskDetailLines(task.detail)}</div><div class="task-meta"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category)}</span><span>${esc(task.due||'예정일 미정')}</span><span>예상 ${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</span><span>진행도 ${esc(task.progress ?? (task.status==='done'?100:0))}%</span></div></div><div class="row-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></div>`;
 }
 
 function weeklyCard() {

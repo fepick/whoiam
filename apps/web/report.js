@@ -152,7 +152,9 @@
       setFont(23, 650);
       const title = wrap(ctx, row.title, columns[1] - 38);
       setFont(19);
-      const detail = row.detail ? wrap(ctx, row.detail, columns[1] - 38) : [];
+      const detail = String(row.detail || '').split(/\r?\n/).map(value => value.trim()).filter(Boolean)
+        .flatMap(value => wrap(ctx, value.replace(/^[-•]\s+/, ''), columns[1] - 56)
+          .map((value, index) => ({value, bullet: index === 0})));
       return {
         ...row,
         titleLines: title,
@@ -262,8 +264,9 @@
           text(value, x + 19, textY, 23, 650);
           textY += 31;
         });
-        row.detailLines.forEach(value => {
-          text(value, x + 19, textY + 4, 19, 400, C.muted);
+        row.detailLines.forEach(({value, bullet}) => {
+          if (bullet) text('•', x + 19, textY + 4, 19, 400, C.muted);
+          text(value, x + 37, textY + 4, 19, 400, C.muted);
           textY += 27;
         });
         x += columns[1];
