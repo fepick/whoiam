@@ -45,6 +45,9 @@ const state = {
   taskMode: 'list',
   taskCategory: '',
   draggedTask: '',
+  vaultQuery: '',
+  vaultKind: '',
+  vaultPage: 0,
   compact: false,
   busy: false
 };
@@ -418,8 +421,38 @@ function recordsView() {
   return `${header('TIME & DAILY LOG','나의 기록','근무시간과 직접 기록한 업무 소요시간을 구분합니다.')}<div class="toolbar"><div class="tabs">${[['time','근무'],['report','일일 보고']].map(([id,label])=>`<button data-record="${id}" class="${state.recordTab===id?'active':''}">${label}</button>`).join('')}</div></div>${state.recordTab==='time'?timeView():reportView()}`;
 }
 
+const vaultKinds = {credential:'로그인 정보','payment-method':'결제수단 참조',person:'개인정보'};
+
+function vaultView() {
+  return `<section class="card wide-card"><div class="card-heading"><h2>보관함 목록</h2><span class="subtle-label">보기는 최대 30초</span></div><div class="vault-filters">${field('별칭 · 카드 끝 네 자리 검색','vault-query',state.vaultQuery,'search','autocomplete="off" maxlength="100"')}${select('유형','vault-kind',[['','전체 유형'],...Object.entries(vaultKinds)],state.vaultKind)}</div><div id="vault-results">${vaultResults()}</div></section>`;
+}
+
+function vaultResults() {
+  const query = state.vaultQuery.trim().toLocaleLowerCase();
+  const entries = data.vault.filter(entry => (!state.vaultKind || entry.kind === state.vaultKind) &&
+    `${entry.alias} ${entry.hint}`.toLocaleLowerCase().includes(query))
+    .sort((a,b) => a.alias.localeCompare(b.alias,'ko') || a.id.localeCompare(b.id));
+  const pages = Math.max(1,Math.ceil(entries.length / 10));
+  state.vaultPage = Math.max(0,Math.min(state.vaultPage,pages-1));
+  const rows = entries.slice(state.vaultPage*10,state.vaultPage*10+10);
+  return `<div class="vault-list">${rows.map(entry=>`<div class="vault-row"><div><strong>${esc(entry.alias)}</strong><small>${esc(vaultKinds[entry.kind] || entry.kind)} · ${esc(entry.hint)}</small></div><div class="row-actions">${button('reveal-secret','보기',entry.id)}${button('delete-secret','삭제',entry.id)}</div></div>`).join('')||empty('조건에 맞는 항목이 없습니다.')}</div><div class="vault-pagination"><span>${entries.length}건 / 전체 ${data.vault.length}건 · ${state.vaultPage+1}/${pages}쪽</span><div class="row-actions"><button class="button button-outline" data-action="vault-prev" ${state.vaultPage===0?'disabled':''}>이전</button><button class="button button-outline" data-action="vault-next" ${state.vaultPage>=pages-1?'disabled':''}>다음</button></div></div>`;
+}
+
+document.addEventListener('input', event => {
+  if (event.target.name !== 'vault-query') return;
+  state.vaultQuery = event.target.value;
+  state.vaultPage = 0;
+  document.getElementById('vault-results').innerHTML = vaultResults();
+});
+document.addEventListener('change', event => {
+  if (event.target.name !== 'vault-kind') return;
+  state.vaultKind = event.target.value;
+  state.vaultPage = 0;
+  document.getElementById('vault-results').innerHTML = vaultResults();
+});
+
 function settingsView() {
-  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div><section class="card wide-card"><div class="card-heading"><h2>보관함 목록</h2><span class="subtle-label">모든 유형은 30초 동안 보기 가능</span></div>${data.vault.map(entry=>`<div class="timeline-item"><div><strong>${esc(entry.alias)}</strong><small>${esc(entry.kind)} · ${esc(entry.hint)}</small></div><div class="row-actions">${button('reveal-secret','보기',entry.id)}${button('delete-secret','삭제',entry.id)}</div></div>`).join('')||empty('저장된 민감정보가 없습니다.')}</section>${personalSettings()}`;
+  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div>${vaultView()}${personalSettings()}`;
 }
 
 function personalSettings() {
@@ -743,6 +776,11 @@ async function act(action, id) {
     return;
   }
   if (!data) throw new Error('먼저 작업 공간의 잠금을 해제해주세요.');
+  if (action === 'vault-prev' || action === 'vault-next') {
+    state.vaultPage += action === 'vault-next' ? 1 : -1;
+    document.getElementById('vault-results').innerHTML = vaultResults();
+    return;
+  }
   if (action === 'archive-task') {
     await moveTask(id, 'archived');
     return;
