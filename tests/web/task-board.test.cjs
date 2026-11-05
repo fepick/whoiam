@@ -43,6 +43,51 @@ test('분류 필터는 두 보기와 기록 합계에 적용된다', () => {
   assert.doesNotMatch(html, /Firmware|kanban-card/);
 });
 
+test('우선순위·예정일·분류·상태를 함께 적용하고 관련 시간 기록만 합산한다',()=>{
+  const context=application();
+  vm.runInContext(`data.today='2026-11-06';data.tasks[0].due='2026-11-06';data.tasks[1].due='2026-11-07';
+    state.taskPriority='P1';state.taskDate='today';state.taskCategory='category:HW';`,context);
+  let html=vm.runInContext('tasksView()',context);
+  assert.match(html,/Board/);
+  assert.doesNotMatch(html,/Firmware/);
+  assert.match(html,/0시간 30분/);
+  assert.match(html,/name="task-priority"/);
+  assert.match(html,/name="task-date"/);
+  vm.runInContext("state.taskTab='done'",context);
+  html=vm.runInContext('tasksView()',context);
+  assert.match(html,/조건에 맞는 업무가 없습니다/);
+  vm.runInContext("state.taskTab='all';state.taskMode='kanban'",context);
+  html=vm.runInContext('tasksView()',context);
+  assert.match(html,/data-task-card="a"/);
+  assert.doesNotMatch(html,/data-task-card="b"/);
+});
+
+test('예정일 필터는 오늘 이전·미정·기간 양끝과 월~일 주간 경계를 구분한다',()=>{
+  const context=application();
+  const matches=(due)=>{context.due=due;return vm.runInContext('matchesTaskFilters({due})',context);};
+  vm.runInContext("data.today='2027-01-03';state.taskDate='week'",context);
+  assert.equal(matches('2026-12-28'),true);
+  assert.equal(matches('2027-01-03'),true);
+  assert.equal(matches('2026-12-27'),false);
+  assert.equal(matches('2027-01-04'),false);
+  assert.equal(matches(''),false);
+  vm.runInContext("state.taskDate='overdue'",context);
+  assert.equal(matches('2027-01-02'),true);
+  assert.equal(matches('2027-01-03'),false);
+  vm.runInContext("state.taskDate='undated'",context);
+  assert.equal(matches(''),true);
+  assert.equal(matches('2027-01-03'),false);
+  vm.runInContext("state.taskDate='range';state.taskDateFrom='2027-01-02';state.taskDateTo='2027-01-04'",context);
+  assert.equal(matches('2027-01-02'),true);
+  assert.equal(matches('2027-01-04'),true);
+  assert.equal(matches('2027-01-05'),false);
+  assert.equal(matches(''),false);
+  vm.runInContext("state.taskDateFrom=''",context);
+  assert.equal(matches('2026-12-01'),true);
+  vm.runInContext("state.taskDateTo=''",context);
+  assert.equal(matches('2027-02-01'),true);
+});
+
 test('상태 이동은 상태만 저장하고 실패하면 기존 상태를 유지한다', async () => {
   const context = application();
   vm.runInContext("render=()=>{}; toast=()=>{}; run=async (command,payload)=>{globalThis.saved={command,payload};};", context);

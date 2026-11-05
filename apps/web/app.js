@@ -44,6 +44,10 @@ const state = {
   taskTab: 'all',
   taskMode: 'list',
   taskCategory: '',
+  taskPriority: '',
+  taskDate: '',
+  taskDateFrom: '',
+  taskDateTo: '',
   draggedTask: '',
   vaultQuery: '',
   vaultKind: '',
@@ -188,6 +192,10 @@ function clearPrivateView() {
   clearCredentialView();
   state.draggedTask = '';
   state.taskCategory = '';
+  state.taskPriority = '';
+  state.taskDate = '';
+  state.taskDateFrom = '';
+  state.taskDateTo = '';
   state.vaultQuery = '';
   state.vaultKind = '';
   state.vaultPage = 0;
@@ -314,23 +322,46 @@ function homeView() {
 }
 
 function tasksView() {
-  const tasks = data.tasks.filter(task => matchesCategory(task) && (state.taskTab === 'all' ? task.status !== 'archived' :
+  const tasks = data.tasks.filter(task => matchesTaskFilters(task) && (state.taskTab === 'all' ? task.status !== 'archived' :
     state.taskTab === 'archived' ? task.status === 'archived' : state.taskTab === 'done' ? task
     .status === 'done' : !['done', 'archived'].includes(task
       .status)));
   const categories = [...new Set(data.tasks.map(task => task.category || ''))];
   if (state.taskCategory && !categories.includes(state.taskCategory.slice(9))) categories.push(state.taskCategory.slice(9));
   categories.sort((a, b) => a.localeCompare(b, 'ko'));
-  const logs = data.logs.filter(log => !state.taskCategory || matchesCategory(data.tasks.find(task => task.id === log.task_id)));
+  const logs = data.logs.filter(log => matchesTaskFilters(data.tasks.find(task => task.id === log.task_id)));
   return `${header('TASKS & PLANS','업무와 소요시간','상태를 옮겨 진행을 정리하고, 실제 소요시간을 기록하세요.')}
     <div class="toolbar task-toolbar"><div class="tabs" aria-label="업무 상태 필터">${[['all','전체'],['todo','진행'],['done','완료'],['archived','보관']].map(([id,label])=>`<button data-task-tab="${id}" class="${state.taskTab===id?'active':''}" aria-pressed="${state.taskTab===id}">${label}</button>`).join('')}</div>${button('new-task','＋ 업무 추가','','button-primary')}</div>
-    <div class="toolbar task-controls">${select('분류','task-category',[['','모든 분류'],...categories.map(category=>[`category:${category}`,category||'미분류'])],state.taskCategory)}<div class="tabs view-tabs" aria-label="업무 보기 모드">${[['list','리스트'],['kanban','칸반']].map(([mode,title])=>`<button data-task-mode="${mode}" class="${state.taskMode===mode?'active':''}" aria-pressed="${state.taskMode===mode}">${title}</button>`).join('')}</div><span class="subtle-label">${tasks.length}개 업무</span></div>
+    <div class="toolbar task-controls">${select('분류','task-category',[['','모든 분류'],...categories.map(category=>[`category:${category}`,category||'미분류'])],state.taskCategory)}${taskFilterControls()}<div class="tabs view-tabs" aria-label="업무 보기 모드">${[['list','리스트'],['kanban','칸반']].map(([mode,title])=>`<button data-task-mode="${mode}" class="${state.taskMode===mode?'active':''}" aria-pressed="${state.taskMode===mode}">${title}</button>`).join('')}</div><span class="subtle-label">${tasks.length}개 업무</span></div>
     ${state.taskMode==='kanban'?kanbanBoard(tasks):`<section class="card wide-card">${tasks.length?tasks.map(taskRow).join(''):empty('조건에 맞는 업무가 없습니다.')}</section>`}
-    <section class="card wide-card"><div class="card-heading"><h2>오늘 입력한 업무 기록${state.taskCategory?' · 선택한 분류':''}</h2><span>${duration(logs.reduce((sum,row)=>sum+row.minutes,0))}</span></div>${logs.length?logs.map(log=>`<div class="timeline-item"><span>${log.minutes}분</span><div><strong>${esc(log.title)}</strong><small>${esc(log.note)}</small></div>${button('edit-log','정정',log.id)}</div>`).join(''):empty('조건에 맞는 시간 기록이 없습니다.')}</section>${commandBox()}`;
+    <section class="card wide-card"><div class="card-heading"><h2>오늘 입력한 업무 기록${state.taskCategory||state.taskPriority||state.taskDate?' · 선택한 조건':''}</h2><span>${duration(logs.reduce((sum,row)=>sum+row.minutes,0))}</span></div>${logs.length?logs.map(log=>`<div class="timeline-item"><span>${log.minutes}분</span><div><strong>${esc(log.title)}</strong><small>${esc(log.note)}</small></div>${button('edit-log','정정',log.id)}</div>`).join(''):empty('조건에 맞는 시간 기록이 없습니다.')}</section>${commandBox()}`;
 }
 
 function matchesCategory(task) {
   return !state.taskCategory || Boolean(task && `category:${task.category || ''}` === state.taskCategory);
+}
+
+function matchesTaskFilters(task) {
+  if (!matchesCategory(task)) return false;
+  if (state.taskPriority && task?.priority !== state.taskPriority) return false;
+  if (!state.taskDate) return true;
+  const due = task?.due || '';
+  if (state.taskDate === 'undated') return !due;
+  if (!due) return false;
+  if (state.taskDate === 'today') return due === data.today;
+  if (state.taskDate === 'overdue') return due < data.today;
+  if (state.taskDate === 'week') {
+    const monday = new Date(`${data.today}T00:00:00Z`);
+    monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
+    const sunday = new Date(monday);
+    sunday.setUTCDate(sunday.getUTCDate() + 6);
+    return due >= monday.toISOString().slice(0,10) && due <= sunday.toISOString().slice(0,10);
+  }
+  return (!state.taskDateFrom || due >= state.taskDateFrom) && (!state.taskDateTo || due <= state.taskDateTo);
+}
+
+function taskFilterControls() {
+  return `${select('우선순위','task-priority',[['','모든 우선순위'],['P1','P1 · 높음'],['P2','P2 · 보통'],['P3','P3 · 낮음']],state.taskPriority)}${select('예정일','task-date',[['','모든 날짜'],['today','오늘'],['week','이번 주 (월~일)'],['overdue','오늘 이전'],['undated','예정일 미정'],['range','기간 지정']],state.taskDate)}${state.taskDate==='range'?`${field('예정일 시작','task-date-from',state.taskDateFrom,'date',state.taskDateTo?`max="${esc(state.taskDateTo)}"`:'')}${field('예정일 종료','task-date-to',state.taskDateTo,'date',state.taskDateFrom?`min="${esc(state.taskDateFrom)}"`:'')}`:''}`;
 }
 
 function kanbanCard(task) {
@@ -1218,6 +1249,16 @@ document.addEventListener('submit', async event => {
 });
 document.addEventListener('change', async event => {
   const input = event.target;
+  const taskFilters = {'task-priority':'taskPriority','task-date':'taskDate','task-date-from':'taskDateFrom','task-date-to':'taskDateTo'};
+  if (taskFilters[input.name]) {
+    if (input.name.startsWith('task-date-') && !input.checkValidity()) {
+      input.reportValidity();
+      return;
+    }
+    state[taskFilters[input.name]] = input.value;
+    render();
+    return;
+  }
   if (input.name === 'task-category') {
     state.taskCategory = input.value;
     render();
