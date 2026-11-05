@@ -88,3 +88,6 @@ CVC/CVV·PIN·마그네틱 트랙 데이터는 저장하지 않습니다.
 - Git ignore: https://git-scm.com/docs/gitignore
 - Docker build context: https://docs.docker.com/build/concepts/context/
 - GitHub secret scanning: https://docs.github.com/en/code-security/concepts/secret-security/secret-scanning
+
+설정 → 기본 설정에서 자동 잠금 대기 시간을 1~240분으로 저장합니다(기본 15분).
+설정은 암호화 저장되며 잠금 해제 및 재실행 시 적용합니다. 목록 폴링·자동 백업은 대기 시간을 연장하지 않습니다.

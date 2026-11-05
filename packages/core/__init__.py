@@ -43,10 +43,15 @@ class Core:
         self.reporting = Reporting(store, self.tasks, self.attendance)
         self.settings_repo = store.scope("core.settings")
         self.commands = store.scope("core.commands")
+        if not store.locked:
+            self.configure_idle()
+
+    def configure_idle(self) -> None:
+        self.store.idle_seconds = self.settings()["idle_minutes"] * 60
 
     def settings(self) -> Json:
         rows = self.settings_repo.all()
-        return (
+        settings = (
             rows[0]
             if rows
             else {
@@ -56,10 +61,13 @@ class Core:
                 "notifications": True,
             }
         )
+        return {"idle_minutes": 15, **settings}
 
     def save_settings(self, data: Json) -> Json:
-        fields(data, {"weekly_limit", "notifications"})
+        fields(data, {"weekly_limit", "notifications", "idle_minutes"})
         settings = self.settings()
+        if "idle_minutes" in data:
+            settings["idle_minutes"] = integer(data, "idle_minutes", 1, 240)
         if "weekly_limit" in data:
             settings["weekly_limit"] = integer(data, "weekly_limit", 60, 10080)
         if "notifications" in data:

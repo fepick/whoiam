@@ -168,6 +168,7 @@ def create_app(
     @app.post("/api/unlock")
     def unlock() -> Json:
         store.unlock()
+        core.configure_idle()
         if backups:
             backups.safe_backup(force=True)
         return {"locked": False}
@@ -185,6 +186,8 @@ def create_app(
         result = core.execute(
             text(body, "name", 64), body["data"], text(body, "request_id", 36)
         )
+        if body["name"] == "core.settings":
+            core.configure_idle()
         if backups:
             backups.safe_backup()
         return {"result": result}

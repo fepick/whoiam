@@ -25,6 +25,7 @@ class EncryptedStore:
         self.connection: sqlite3.Connection | None = None
         self.depth = 0
         self.touched = 0.0
+        self.idle_seconds = IDLE_SECONDS
         self.revision = 0
         self.dirty = False
         self.before_lock: Callable[[], None] | None = None
@@ -35,7 +36,7 @@ class EncryptedStore:
         if (
             self.cipher
             and not self.locking
-            and time.monotonic() - self.touched > IDLE_SECONDS
+            and time.monotonic() - self.touched > self.idle_seconds
         ):
             self.lock()
         return self.cipher is None

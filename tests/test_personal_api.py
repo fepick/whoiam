@@ -1,4 +1,5 @@
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
@@ -9,6 +10,44 @@ from packages.platform.runtime import RuntimePaths
 from packages.platform.storage import EncryptedStore
 from packages.platform.vault import Vault, VaultKeys
 from tests.test_runtime import MemoryKeys
+
+
+def test_idle_setting_validation_persistence_and_poll_expiry(
+    store: EncryptedStore,
+) -> None:
+    app = create_app(store, demo=True)
+    with TestClient(app, base_url="http://127.0.0.1:4173") as client:
+        client.get("/")
+        csrf = client.get("/api/status").json()["csrf"]
+        headers = {"origin": "http://127.0.0.1:4173", "x-whoiam-csrf": csrf}
+        assert store.idle_seconds == 900
+        for value, status in ((0, 400), (241, 400), (True, 400), (1.5, 400), (30, 200)):
+            response = client.post(
+                "/api/commands",
+                json={
+                    "name": "core.settings",
+                    "data": {"idle_minutes": value},
+                    "request_id": str(uuid4()),
+                },
+                headers=headers,
+            )
+            assert response.status_code == status
+        assert store.idle_seconds == 1800
+        store.touched -= 1000
+        touched = store.touched
+        assert client.get("/api/snapshot").status_code == 200
+        assert store.touched == touched
+        store.touched -= 801
+        assert client.get("/api/status").json()["locked"] is True
+        assert client.post("/api/unlock", json={}, headers=headers).status_code == 200
+        assert store.idle_seconds == 1800
+    reopened = EncryptedStore(store.path, store.key_loader)
+    try:
+        reopened.unlock()
+        create_app(reopened, demo=True)
+        assert reopened.idle_seconds == 1800
+    finally:
+        reopened.close()
 
 
 def test_backup_api_auth_and_restore(tmp_path: Path) -> None:

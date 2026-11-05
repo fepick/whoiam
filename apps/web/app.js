@@ -188,6 +188,9 @@ function clearPrivateView() {
   clearCredentialView();
   state.draggedTask = '';
   state.taskCategory = '';
+  state.vaultQuery = '';
+  state.vaultKind = '';
+  state.vaultPage = 0;
   currentReport = '';
   reportDirty = false;
   pendingRequest = null;
@@ -452,7 +455,7 @@ document.addEventListener('change', event => {
 });
 
 function settingsView() {
-  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div>${vaultView()}${personalSettings()}`;
+  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${field('자동 잠금 대기 시간 (분)','idle_minutes',data.settings.idle_minutes ?? 15,'number','min="1" max="240" step="1" required')}<p class="subtle-label">1~240분 · 기본 15분 · 조회 자동 갱신은 대기 시간을 연장하지 않습니다.</p>${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div>${vaultView()}${personalSettings()}`;
 }
 
 function personalSettings() {
@@ -1186,7 +1189,8 @@ document.addEventListener('submit', async event => {
     if (type === 'settings') {
       await run('core.settings', {
         weekly_limit: Math.round(Number(values.weekly_hours) * 60),
-        notifications: values.notifications === 'true'
+        notifications: values.notifications === 'true',
+        idle_minutes: Number(values.idle_minutes)
       });
       render();
       toast('설정을 저장했습니다.');
