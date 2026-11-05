@@ -37,9 +37,9 @@ def test_credential_reveal_is_scoped_locked_and_audited(store: EncryptedStore) -
         ("payment-method", {"last_four": "1234"}),
     ):
         other = vault.save({"kind": kind, "alias": "가상 항목", **extra})
-        with pytest.raises(DomainError) as denied:
-            vault.reveal({"id": other["id"]}, "local-ui", "credential-view")
-        assert denied.value.status == 403
+        values = vault.reveal({"id": other["id"]}, "local-ui", "credential-view")
+        assert all(values[key] == value for key, value in extra.items())
+        assert vault.audit.all()[-1]["action"] == f"{kind}.reveal"
     store.lock()
     with pytest.raises(DomainError) as locked:
         vault.reveal({"id": entry["id"]}, "local-ui", "credential-view")

@@ -56,3 +56,17 @@ test('조회 응답 전에 닫기·창 이동·잠금·탭 숨김 시 늦은 원
     assert.equal(element('flow-dialog').open,false,action);
   }
 });
+
+test('결제수단 참조와 개인정보도 한 건씩 텍스트로 표시한다', async()=>{
+  for (const [kind,values] of [
+    ['payment-method',{issuer:'가상 카드사',last_four:'1234',token:'<fake-token>'}],
+    ['person',{name:'가상 사용자',email:'fake@example.invalid',phone:'000',address:'<가상 주소>'}],
+  ]) {
+    const {context,element}=application();
+    context.kind=kind; context.values=values;
+    vm.runInContext('data.vault[0].kind=kind;api=async()=>values;',context);
+    await vm.runInContext("showCredential('fake')",context);
+    for (const [key,value] of Object.entries(values)) assert.equal(element(`credential-${key}`).textContent,value);
+    assert.doesNotMatch(element('credential-preview').innerHTML,/<fake-token>|<가상 주소>/);
+  }
+});
