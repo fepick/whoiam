@@ -27,6 +27,8 @@ py -3 -m venv .venv
 
 **[다른 PC 설치 가이드 · CLI AI에게 붙여 넣을 요청문](docs/setup.md)**
 
+앱 안의 **도움말 ⓘ**에서 빠른 시작, 기능별 사용법, 근무 산정 규칙, 백업·복구·연결 문제 안내를 볼 수 있습니다. PC에서는 메뉴 하단, 작은 화면에서는 상단의 도움말 버튼을 사용합니다.
+
 ## 데이터와 배포
 
 운영 데이터는 checkout 밖 `%LOCALAPPDATA%\Whoiam\.private\production\`에 암호화하며, 키는 Windows 계정의 OS 보안 저장소에 분리합니다.

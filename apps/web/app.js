@@ -37,6 +37,7 @@ const navItems = [
   ['records', '기록', 'records'],
   ['settings', '설정', 'settings']
 ];
+const pageItems = [...navItems, ['help', '도움말', 'info']];
 const state = {
   page: 'home',
   materialTab: 'purchases',
@@ -573,10 +574,68 @@ async function personalAction(action, id) {
   return false;
 }
 
+function helpView() {
+  const topics = [['intro','후임 소개'],['start','빠른 시작'],['tasks','업무'],['materials','구매·재고'],['attendance','근무 기록'],['reports','일일 보고'],['vault','민감정보 보관함'],['manage','관리·문제 해결']];
+  return `${header('WHOIAM GUIDE','whoiam(후임) 도움말','반복되는 일을 챙기고, 하루의 기록을 다음 할 일로 연결합니다.')}
+    <div class="help-layout"><nav class="card help-topics" aria-label="도움말 목차"><h2>사용 안내</h2>${topics.map(([id,label])=>`<button type="button" data-help-section="${id}">${label}</button>`).join('')}</nav><div class="help-articles">
+    <section class="card help-section" aria-labelledby="help-intro"><h2 id="help-intro" tabindex="-1">후임 소개</h2>
+      <p><strong>whoiam(후임)</strong>은 업무·구매·재고·근무 기록과 일일 보고를 연결하는 개인용 로컬 업무비서입니다. 한글 이름 ‘후임’에는 반복되는 일을 챙기는 업무 동료라는 뜻을 담았습니다.</p>
+      <p>웹브라우저는 조작 화면이고, 실제 처리는 같은 PC의 Python 서버에서 합니다. 현재 실제 사용은 Windows 개인 계정 기준이며 인터넷 공개 서버나 여러 사용자의 동시 공유는 지원하지 않습니다.</p>
+      <p>이 안내는 앱에 포함되어 인터넷 없이 볼 수 있습니다. 잠금을 해제하지 않아도 도움말을 읽을 수 있습니다.</p></section>
+    <section class="card help-section" aria-labelledby="help-start"><h2 id="help-start" tabindex="-1">빠른 시작</h2>
+      <ol><li><strong>실행·잠금 해제:</strong> 서버가 자동으로 연 브라우저에서 잠금을 해제합니다. 처음 사용하는 PC는 빈 저장소로 시작합니다.</li>
+      <li><strong>출근:</strong> 홈의 출근 버튼 또는 명령 입력란에 ‘출근’을 입력합니다. 출근 기록과 오늘 챙길 일을 확인합니다.</li>
+      <li><strong>업무 중:</strong> 업무를 추가하고 진행 상태·소요시간·수행 결과를 기록합니다. 필요할 때 휴게 시작·종료도 남깁니다.</li>
+      <li><strong>퇴근:</strong> 야근 여부를 선택하고 퇴근을 기록합니다. 생성된 일일 보고를 확인·편집한 뒤 저장하고 PNG 또는 텍스트로 공유합니다.</li></ol>
+      <p>설정의 <strong>근무시간 기록 기본설정</strong>에서 회사 기준을 먼저 저장하면 합계에 반영됩니다. 데모는 가상 데이터를 메모리에만 보관하며 종료하면 사라집니다.</p>
+      <button class="button button-outline" data-nav="home">홈 열기</button></section>
+    <section class="card help-section" aria-labelledby="help-tasks"><h2 id="help-tasks" tabindex="-1">업무 · 리스트와 칸반</h2>
+      <ul><li><strong>추가·수정:</strong> 제목, 줄별 메모, 분류, 우선순위(P1 높음 / P2 보통 / P3 낮음), 예정일, 예상 소요시간(분), 진행도를 입력합니다.</li>
+      <li><strong>필터:</strong> 상태·분류·우선순위·예정일을 함께 선택합니다. 예정일은 오늘·이번 주(월~일)·오늘 이전·미정·기간 지정으로 좁힐 수 있습니다. 리스트와 칸반 전환 시 조건을 유지합니다.</li>
+      <li><strong>칸반:</strong> 카드를 드래그해 상태를 옮깁니다. 터치·키보드에서는 수정을 사용합니다. ‘내용’에서 상세를 열고 닫기·Esc로 돌아옵니다.</li>
+      <li><strong>시간 기록:</strong> 입력할 때마다 소요시간이 <em>누적</em>됩니다. 잘못 입력했다면 아래 ‘오늘 입력한 업무 기록’의 ‘정정’을 사용합니다. 필터를 걸면 이 기록과 합계도 해당 조건으로 좁혀집니다.</li>
+      <li><strong>진행도·보관:</strong> 진행도는 직접 입력하며 상태 이동으로 자동 계산하지 않습니다. 완료한 업무도 보드에 남습니다. ‘보관’을 누르면 기본 보기에서 숨겨지고 ‘보관’ 필터에서 수정해 다시 꺼낼 수 있습니다.</li></ul>
+      <button class="button button-outline" data-nav="tasks">업무 열기</button></section>
+    <section class="card help-section" aria-labelledby="help-materials"><h2 id="help-materials" tabindex="-1">구매 · 재고</h2>
+      <p>물품 메뉴에서 품목을 등록하고 구매 내역에 판매처·배송 예정·알아보기 쉬운 메모를 남깁니다. 현재 구매와 배송 상태는 직접 입력·수정하며 판매처 자동 주문·실시간 배송 조회는 제공하지 않습니다.</p>
+      <p>입고 처리 시 재고 품목·수량과 포장당 수량을 확인합니다. 거래명세서·카드전표는 PDF·PNG·JPEG(개당 최대 5MB)로 첨부할 수 있습니다.</p>
+      <p>납땜·조립 소모는 BOM 버전을 등록한 뒤 보드 수량과 추가 손실을 입력하고 소요량을 미리 확인합니다. 일반 소모는 입출고 기록, 실제 수량과 다르면 실사 조정을 사용합니다.</p>
+      <button class="button button-outline" data-nav="materials">물품 열기</button></section>
+    <section class="card help-section" aria-labelledby="help-attendance"><h2 id="help-attendance" tabindex="-1">근무 기록 · 산정 규칙과 야근</h2>
+      <p>출근·휴게 시작·휴게 종료·퇴근으로 실제 시각을 기록합니다. 수동 입력은 날짜와 24시간제 시각을 사용하며 아직 지나지 않은 퇴근 예정 시각은 저장할 수 없습니다. 자정을 넘기면 퇴근 날짜를 다음 날로 지정합니다.</p>
+      <p>수동 입력은 겹치는 기존 기록 전체를 변경 이력에 보관하고 대체합니다. 정정 사유를 남기고 출퇴근 날짜·시각을 확인하세요.</p>
+      <ol><li>설정 → 근무시간 기록 기본설정 → <strong>사내 기준 채우기</strong> → <strong>근무 기본설정 저장</strong>을 누릅니다. 초기 상태는 미적용입니다.</li>
+      <li>기본 기준은 08:00 이전, 12:00~13:00 휴게, 17:00~17:30 준비시간 제외입니다. 각 기준의 시각과 적용 여부를 바꿀 수 있습니다.</li>
+      <li>기록마다 ‘야근 지정/해제’를 선택합니다. 수동 입력·정정 또는 퇴근 확인 화면에서도 선택할 수 있습니다. 야근이면 준비시간을 인정하지만 직접 입력한 휴게는 차감합니다.</li></ol>
+      <p>원본 시각은 유지하고 겹치는 제외·휴게는 한 번만 차감합니다. 규칙은 기존 기록의 일·주간 합계에도 적용되며 매일 한국 날짜 기준입니다. 자정을 넘긴 다음 날의 이른 시간도 제외될 수 있습니다.</p>
+      <p>주간 합계는 월~일 기준이며 근무 중인 기록은 잠정값입니다. 주간 알림 기준은 설정에서 변경합니다. 급여 대조는 예상 실수령액과 실제 입금액을 직접 입력해 비교하는 기능입니다.</p>
+      <button class="button button-outline" data-record="time">근무 기록 열기</button></section>
+    <section class="card help-section" aria-labelledby="help-reports"><h2 id="help-reports" tabindex="-1">일일 보고 · PNG와 텍스트</h2>
+      <p>기록 → 일일 보고에서 날짜를 선택하고 초안을 생성합니다. 해당 날짜의 업무 로그가 진행사항으로 모이며 미완료 업무는 예정사항에 들어갑니다. 내용·소요시간·계획을 편집한 뒤 <strong>보고서 저장</strong>을 누릅니다.</p>
+      <p>PNG는 진행·예정사항을 한 장으로 보여주고, 상세내용은 입력한 줄마다 점으로 구분합니다. 아래 텍스트 보고는 <strong>당일 진행 업무만</strong> 포함하며 복사 버튼으로 가져갈 수 있습니다. 예정업무는 텍스트에 포함하지 않습니다.</p>
+      <p>보고의 업무별 소요시간은 직접 기록한 값의 합계로, 출퇴근으로 계산한 근무시간과 다를 수 있습니다. 근무 산정 규칙을 바꿔도 이미 저장한 보고서는 자동 수정되지 않습니다. 필요하면 다시 생성·편집·저장하세요.</p>
+      <button class="button button-outline" data-record="report">일일 보고 열기</button></section>
+    <section class="card help-section" aria-labelledby="help-vault"><h2 id="help-vault" tabindex="-1">민감정보 보관함</h2>
+      <p>설정에서 로그인 정보·결제수단 참조·개인정보를 등록합니다. 목록은 별칭·마스킹만 표시하며 별칭·카드 끝 네 자리 검색과 유형 필터로 찾고 10건씩 넘겨 봅니다.</p>
+      <p>‘보기’는 선택한 한 건을 최대 30초 표시합니다. 닫기·Esc·다른 창/탭 이동·잠금 시 숨깁니다. 전체 카드번호·CVC·PIN은 입력하지 않습니다.</p>
+      <p>자동 잠금 시간은 설정 → 기본 설정에서 1~240분(기본 15분)으로 저장합니다. 목록 자동 갱신과 자동 백업은 잠금 대기 시간을 연장하지 않습니다.</p>
+      <button class="button button-outline" data-nav="settings">설정 열기</button></section>
+    <section class="card help-section" aria-labelledby="help-manage"><h2 id="help-manage" tabindex="-1">관리 · 문제 해결</h2>
+      <details open><summary>실행·업데이트·연결 오류</summary><p>프로젝트 폴더에서 다음을 실행합니다. 서버 창을 닫거나 앱을 종료하면 다시 실행해야 합니다.</p><pre><code>.\\.venv\\Scripts\\python.exe -m apps.server</code></pre>
+      <p>화면 변경은 새로고침, 서버/API 변경은 종료 후 재실행이 필요합니다. ‘로컬 화면을 다시 열어주세요’가 나오면 서버가 자동으로 연 브라우저를 사용하세요. 기본 주소는 http://127.0.0.1:4173입니다.</p>
+      <p>설정 → 앱 종료로 정상 종료하거나 서버 터미널에서 Ctrl+C를 누릅니다. 다른 프로그램을 임의로 종료하지 말고, 포트가 사용 중이면 기존 후임 서버 실행 여부를 확인하세요.</p></details>
+      <details><summary>데이터 위치·백업·다른 PC 복구</summary><p>기본 운영 데이터는 %LOCALAPPDATA%\\Whoiam\\.private\\production\\에 암호화 저장됩니다. 키는 Windows 계정의 OS 보안 저장소에 별도로 보관합니다. 개발·테스트 프로필은 분리됩니다.</p>
+      <p>설정 → 개인 실사용 관리에서 지금 백업·백업 목록·복원을 사용합니다. 변경 후 약 5분 이내 및 잠금·정상 종료 전 자동 백업합니다. 같은 디스크의 백업은 PC 고장에 대비한 별도 사본을 대신하지 않습니다.</p>
+      <p>다른 PC로 옮길 때는 소스만 복사해도 기존 데이터가 따라오지 않습니다. 암호화 DB 백업·별도 복구 파일(.whoiam-recovery)·복구 암호가 필요합니다. 앱을 종료하고 배포 폴더의 <code>docs/personal-service.md</code>에 있는 복구 절차를 따릅니다. 복구 암호는 터미널에서 직접 입력합니다.</p></details>
+      <details><summary>설치·지원 범위</summary><p>Windows와 Python 3.11 이상을 사용합니다. 새 PC 설치는 배포 폴더의 <code>docs/setup.md</code>에 CLI AI에게 붙여 넣을 요청문과 함께 안내되어 있습니다. ZIP은 독립 실행 EXE가 아니므로 Python과 의존성이 필요합니다.</p>
+      <p>설정에서 현재 사용자 로그인 시 자동 실행을 관리할 수 있습니다. 운영 정보·키·복구 파일을 GitHub나 배포 ZIP에 넣지 마세요. 판매처 자동 구매·실시간 배송 조회·급여 세금 계산·MCU 펌웨어는 후속 범위입니다.</p></details>
+    </section></div></div>`;
+}
+
 function render() {
   document.getElementById('desktop-nav').innerHTML = navMarkup();
   document.getElementById('mobile-nav').innerHTML = navMarkup();
-  document.getElementById('breadcrumb-current').textContent = navItems.find(row => row[0] === state
+  document.getElementById('breadcrumb-current').textContent = pageItems.find(row => row[0] === state
     .page)[1];
   document.getElementById('view-toggle').innerHTML = icon(state.compact ? 'desktop' : 'phone');
   document.querySelector('.workspace-footer').innerHTML =
@@ -584,7 +643,12 @@ function render() {
   document.querySelector('.device-status').innerHTML =
     `<span class="node-dot"></span>${esc({production:'운영',development:'개발',test:'테스트',demo:'임시 데모'}[connection.profile] || (connection.demo?'임시 데모':'로컬 장치'))}`;
   const main = document.getElementById('main-content');
-  if (connection.error) main.innerHTML =
+  document.querySelectorAll('[data-nav="help"]').forEach(button => {
+    if (state.page === 'help') button.setAttribute('aria-current','page');
+    else button.removeAttribute('aria-current');
+  });
+  if (state.page === 'help') main.innerHTML = helpView();
+  else if (connection.error) main.innerHTML =
     `${header('LOCAL WORKSPACE','로컬 서버에 연결해주세요.','실제 기능은 Python 로컬 서버에서 실행됩니다.')}<section class="card wide-card"><p>${esc(connection.error)}</p><pre>python -m apps.server --demo=True</pre><p>가상 데이터로 기능을 확인하거나, 데모 옵션 없이 실행해 OS 보안 저장소를 연결할 수 있습니다.</p>${button('retry','다시 연결')}</section>`;
   else if (connection.locked || !data) main.innerHTML =
     `${header('LOCAL & PRIVATE','작업 공간이 잠겨 있습니다.','현재 OS 계정의 보안 키 저장소로 잠금을 해제합니다.')}<section class="card wide-card"><p>잠금을 해제하면 로컬 업무 기록을 사용할 수 있습니다.</p>${button('unlock','잠금 해제','','button-primary')}</section>`;
@@ -599,12 +663,12 @@ function render() {
     main.innerHTML = views[state.page]();
     if (state.page === 'records' && state.recordTab === 'report') window.WhoiamReport.mount();
   }
-  document.title = `${navItems.find(row=>row[0]===state.page)[1]} · whoiam(후임)`;
+  document.title = `${pageItems.find(row=>row[0]===state.page)[1]} · whoiam(후임)`;
 }
 
 function navigate(page) {
   hideCredentialView();
-  state.page = navItems.some(row => row[0] === page) ? page : 'home';
+  state.page = pageItems.some(row => row[0] === page) ? page : 'home';
   location.hash = state.page;
   render();
   window.scrollTo({
@@ -1061,6 +1125,12 @@ document.addEventListener('click', event => {
   const target = event.target.closest('button');
   if (!target) return;
   if (window.WhoiamReport.handleAction(target)) return;
+  if (target.dataset.helpSection) {
+    const heading = document.getElementById(`help-${target.dataset.helpSection}`);
+    heading?.scrollIntoView({behavior:'instant',block:'start'});
+    heading?.focus({preventScroll:true});
+    return;
+  }
   if (target.dataset.nav) {
     navigate(target.dataset.nav);
     return;
@@ -1379,7 +1449,7 @@ document.getElementById('flow-dialog').addEventListener('close', () => {
 window.addEventListener('hashchange', () => {
   hideCredentialView();
   const page = location.hash.slice(1);
-  if (navItems.some(row => row[0] === page) && page !== state.page) {
+  if (pageItems.some(row => row[0] === page) && page !== state.page) {
     state.page = page;
     render();
   }
@@ -1399,11 +1469,11 @@ async function boot() {
     render();
   }
 }
-if (navItems.some(row => row[0] === location.hash.slice(1))) state.page = location.hash.slice(1);
+if (pageItems.some(row => row[0] === location.hash.slice(1))) state.page = location.hash.slice(1);
 async function poll() {
   if (state.busy || state.draggedTask) return;
   try {
-    if (document.hidden || document.getElementById('flow-dialog').open) {
+    if (state.page === 'help' || document.hidden || document.getElementById('flow-dialog').open) {
       const status = await api('status');
       connection = {
         ...connection,
@@ -1412,7 +1482,7 @@ async function poll() {
       if (status.locked) {
         data = null;
         clearPrivateView();
-        render();
+        if (state.page !== 'help') render();
       }
       return;
     }
