@@ -136,7 +136,7 @@ def create_app(
             "locked": store.locked,
             "demo": demo,
             "csrf": csrf,
-            "version": "0.04",
+            "version": "0.05",
             "profile": profile,
             "revision": store.revision,
             "backup": {

@@ -639,7 +639,7 @@ function render() {
     .page)[1];
   document.getElementById('view-toggle').innerHTML = icon(state.compact ? 'desktop' : 'phone');
   document.querySelector('.workspace-footer').innerHTML =
-    `<span><span class="tiny-dot"></span>${connection.demo?'임시 데모 · 가상 데이터만 사용하세요':connection.locked?'로컬 작업 공간 · 잠김':'로컬 암호화 저장 · 외부 전송 없음'}</span><span>whoiam(후임) · v0.04</span>`;
+    `<span><span class="tiny-dot"></span>${connection.demo?'임시 데모 · 가상 데이터만 사용하세요':connection.locked?'로컬 작업 공간 · 잠김':'로컬 암호화 저장 · 외부 전송 없음'}</span><span>whoiam(후임) · v0.05</span>`;
   document.querySelector('.device-status').innerHTML =
     `<span class="node-dot"></span>${esc({production:'운영',development:'개발',test:'테스트',demo:'임시 데모'}[connection.profile] || (connection.demo?'임시 데모':'로컬 장치'))}`;
   const main = document.getElementById('main-content');

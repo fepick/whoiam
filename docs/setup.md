@@ -5,17 +5,17 @@ Windows 10/11 · Python 3.11 이상을 기준으로 합니다. 현재 사용자 
 
 ## 파일 준비
 
-검증된 `whoiam-0.04.zip`을 받았다면 원하는 폴더에 압축을 풉니다. 기존 `.venv`나 운영 데이터는 복사하지 않습니다.
-ZIP과 함께 받은 `.sha256`의 해시와 `Get-FileHash .\whoiam-0.04.zip -Algorithm SHA256` 결과를 대조할 수 있습니다.
+검증된 `whoiam-0.05.zip`을 받았다면 원하는 폴더에 압축을 풉니다. 기존 `.venv`나 운영 데이터는 복사하지 않습니다.
+ZIP과 함께 받은 `.sha256`의 해시와 `Get-FileHash .\whoiam-0.05.zip -Algorithm SHA256` 결과를 대조할 수 있습니다.
 Git으로 설치할 때는 접근 권한이 있는 계정으로 다음을 실행합니다. GitHub 로그인은 직접 진행하고 비밀번호·토큰을 AI에게 보내지 않습니다.
 
 ```powershell
-git clone --branch v0.04 https://github.com/fepick/whoiam.git
+git clone --branch v0.05 https://github.com/fepick/whoiam.git
 cd whoiam
 ```
 
-재현 가능한 설치에는 승인된 릴리스 태그 `v0.04`를 사용합니다. 태그로 clone하면 detached HEAD 상태가 되는 것은 정상입니다.
-최신 통합 버전이 필요하면 위 명령의 `--branch v0.04`를 `--branch main`으로 바꿉니다.
+재현 가능한 설치에는 승인된 릴리스 태그 `v0.05`를 사용합니다. 태그로 clone하면 detached HEAD 상태가 되는 것은 정상입니다.
+최신 통합 버전이 필요하면 위 명령의 `--branch v0.05`를 `--branch main`으로 바꿉니다.
 릴리스 작업 브랜치는 통합 후 삭제될 수 있으므로 설치 대상으로 사용하지 않습니다.
 저장소 접근 권한이 없는 사용자에게는 Git 이력이 없는 검증된 소스 ZIP을 전달합니다.
 
@@ -63,7 +63,7 @@ ZIP을 풀거나 저장소를 clone한 다음, **프로젝트 폴더에서** AI 
 
 1. AGENTS.md와 docs/setup.md를 읽고 기존 변경을 보존해라.
 2. Git checkout이면 현재 태그·브랜치와 미커밋 변경을 확인해 알려라.
-   설치 기준은 승인된 v0.04 태그 또는 main이다. 다른 작업 브랜치나 기존 변경을 임의로 전환·초기화하지 마라.
+   설치 기준은 승인된 v0.05 태그 또는 main이다. 다른 작업 브랜치나 기존 변경을 임의로 전환·초기화하지 마라.
 3. Python 3.11 이상을 확인하고 scripts/Setup-Whoiam.ps1로 .venv와 requirements.txt를 설치해라.
    정책이 스크립트를 차단하면 문서의 직접 명령을 사용해라. 실행 정책·방화벽을 변경하지 마라.
    Python이 없으면 설치해야 할 항목을 알려라. 기존 Python이나 가상환경을 삭제하지 마라.
