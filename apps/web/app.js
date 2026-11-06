@@ -37,6 +37,7 @@ const navItems = [
   ['records', '기록', 'records'],
   ['settings', '설정', 'settings']
 ];
+const pageItems = [...navItems, ['help', '도움말', 'info']];
 const state = {
   page: 'home',
   materialTab: 'purchases',
@@ -44,7 +45,14 @@ const state = {
   taskTab: 'all',
   taskMode: 'list',
   taskCategory: '',
+  taskPriority: '',
+  taskDate: '',
+  taskDateFrom: '',
+  taskDateTo: '',
   draggedTask: '',
+  vaultQuery: '',
+  vaultKind: '',
+  vaultPage: 0,
   compact: false,
   busy: false
 };
@@ -185,6 +193,13 @@ function clearPrivateView() {
   clearCredentialView();
   state.draggedTask = '';
   state.taskCategory = '';
+  state.taskPriority = '';
+  state.taskDate = '';
+  state.taskDateFrom = '';
+  state.taskDateTo = '';
+  state.vaultQuery = '';
+  state.vaultKind = '';
+  state.vaultPage = 0;
   currentReport = '';
   reportDirty = false;
   pendingRequest = null;
@@ -280,8 +295,13 @@ function commandBox() {
   return `<form class="command-box" id="command-form"><span class="command-symbol">${icon('command')}</span><input name="command" required maxlength="100" aria-label="명령" placeholder="출근, 퇴근, 오늘 할 일, 재고, 배송, 보고" autocomplete="off"><button class="icon-button" type="submit" aria-label="명령 실행">${icon('arrow')}</button></form>`;
 }
 
+function taskDetailLines(value) {
+  const lines = String(value || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  return lines.length ? `<ul class="task-detail-lines">${lines.map(line => `<li>${esc(line.replace(/^[-•]\s+/, ''))}</li>`).join('')}</ul>` : '';
+}
+
 function taskRow(task) {
-  return `<div class="task-row ${task.status==='done'?'done':''}"><button class="task-check" data-action="toggle-task" data-id="${esc(task.id)}" aria-label="${esc(task.title)} 완료 전환" aria-pressed="${task.status==='done'}">${task.status==='done'?icon('check'):''}</button><div class="task-content"><div class="task-title">${esc(task.title)}</div><div class="task-detail">${esc(task.detail)}</div><div class="task-meta"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category)}</span><span>${esc(task.due||'예정일 미정')}</span><span>예상 ${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</span><span>진행도 ${esc(task.progress ?? (task.status==='done'?100:0))}%</span></div></div><div class="row-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></div>`;
+  return `<div class="task-row ${task.status==='done'?'done':''}"><button class="task-check" data-action="toggle-task" data-id="${esc(task.id)}" aria-label="${esc(task.title)} 완료 전환" aria-pressed="${task.status==='done'}">${task.status==='done'?icon('check'):''}</button><div class="task-content"><div class="task-title">${esc(task.title)}</div><div class="task-detail">${taskDetailLines(task.detail)}</div><div class="task-meta"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category)}</span><span>${esc(task.due||'예정일 미정')}</span><span>예상 ${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</span><span>진행도 ${esc(task.progress ?? (task.status==='done'?100:0))}%</span></div></div><div class="row-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></div>`;
 }
 
 function weeklyCard() {
@@ -303,32 +323,61 @@ function homeView() {
 }
 
 function tasksView() {
-  const tasks = data.tasks.filter(task => matchesCategory(task) && (state.taskTab === 'all' ? task.status !== 'archived' :
+  const tasks = data.tasks.filter(task => matchesTaskFilters(task) && (state.taskTab === 'all' ? task.status !== 'archived' :
     state.taskTab === 'archived' ? task.status === 'archived' : state.taskTab === 'done' ? task
     .status === 'done' : !['done', 'archived'].includes(task
       .status)));
   const categories = [...new Set(data.tasks.map(task => task.category || ''))];
   if (state.taskCategory && !categories.includes(state.taskCategory.slice(9))) categories.push(state.taskCategory.slice(9));
   categories.sort((a, b) => a.localeCompare(b, 'ko'));
-  const logs = data.logs.filter(log => !state.taskCategory || matchesCategory(data.tasks.find(task => task.id === log.task_id)));
+  const logs = data.logs.filter(log => matchesTaskFilters(data.tasks.find(task => task.id === log.task_id)));
   return `${header('TASKS & PLANS','업무와 소요시간','상태를 옮겨 진행을 정리하고, 실제 소요시간을 기록하세요.')}
     <div class="toolbar task-toolbar"><div class="tabs" aria-label="업무 상태 필터">${[['all','전체'],['todo','진행'],['done','완료'],['archived','보관']].map(([id,label])=>`<button data-task-tab="${id}" class="${state.taskTab===id?'active':''}" aria-pressed="${state.taskTab===id}">${label}</button>`).join('')}</div>${button('new-task','＋ 업무 추가','','button-primary')}</div>
-    <div class="toolbar task-controls">${select('분류','task-category',[['','모든 분류'],...categories.map(category=>[`category:${category}`,category||'미분류'])],state.taskCategory)}<div class="tabs view-tabs" aria-label="업무 보기 모드">${[['list','리스트'],['kanban','칸반']].map(([mode,title])=>`<button data-task-mode="${mode}" class="${state.taskMode===mode?'active':''}" aria-pressed="${state.taskMode===mode}">${title}</button>`).join('')}</div><span class="subtle-label">${tasks.length}개 업무</span></div>
+    <div class="toolbar task-controls">${select('분류','task-category',[['','모든 분류'],...categories.map(category=>[`category:${category}`,category||'미분류'])],state.taskCategory)}${taskFilterControls()}<div class="tabs view-tabs" aria-label="업무 보기 모드">${[['list','리스트'],['kanban','칸반']].map(([mode,title])=>`<button data-task-mode="${mode}" class="${state.taskMode===mode?'active':''}" aria-pressed="${state.taskMode===mode}">${title}</button>`).join('')}</div><span class="subtle-label">${tasks.length}개 업무</span></div>
     ${state.taskMode==='kanban'?kanbanBoard(tasks):`<section class="card wide-card">${tasks.length?tasks.map(taskRow).join(''):empty('조건에 맞는 업무가 없습니다.')}</section>`}
-    <section class="card wide-card"><div class="card-heading"><h2>오늘 입력한 업무 기록${state.taskCategory?' · 선택한 분류':''}</h2><span>${duration(logs.reduce((sum,row)=>sum+row.minutes,0))}</span></div>${logs.length?logs.map(log=>`<div class="timeline-item"><span>${log.minutes}분</span><div><strong>${esc(log.title)}</strong><small>${esc(log.note)}</small></div>${button('edit-log','정정',log.id)}</div>`).join(''):empty('조건에 맞는 시간 기록이 없습니다.')}</section>${commandBox()}`;
+    <section class="card wide-card"><div class="card-heading"><h2>오늘 입력한 업무 기록${state.taskCategory||state.taskPriority||state.taskDate?' · 선택한 조건':''}</h2><span>${duration(logs.reduce((sum,row)=>sum+row.minutes,0))}</span></div>${logs.length?logs.map(log=>`<div class="timeline-item"><span>${log.minutes}분</span><div><strong>${esc(log.title)}</strong><small>${esc(log.note)}</small></div>${button('edit-log','정정',log.id)}</div>`).join(''):empty('조건에 맞는 시간 기록이 없습니다.')}</section>${commandBox()}`;
 }
 
 function matchesCategory(task) {
   return !state.taskCategory || Boolean(task && `category:${task.category || ''}` === state.taskCategory);
 }
 
+function matchesTaskFilters(task) {
+  if (!matchesCategory(task)) return false;
+  if (state.taskPriority && task?.priority !== state.taskPriority) return false;
+  if (!state.taskDate) return true;
+  const due = task?.due || '';
+  if (state.taskDate === 'undated') return !due;
+  if (!due) return false;
+  if (state.taskDate === 'today') return due === data.today;
+  if (state.taskDate === 'overdue') return due < data.today;
+  if (state.taskDate === 'week') {
+    const monday = new Date(`${data.today}T00:00:00Z`);
+    monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7);
+    const sunday = new Date(monday);
+    sunday.setUTCDate(sunday.getUTCDate() + 6);
+    return due >= monday.toISOString().slice(0,10) && due <= sunday.toISOString().slice(0,10);
+  }
+  return (!state.taskDateFrom || due >= state.taskDateFrom) && (!state.taskDateTo || due <= state.taskDateTo);
+}
+
+function taskFilterControls() {
+  return `${select('우선순위','task-priority',[['','모든 우선순위'],['P1','P1 · 높음'],['P2','P2 · 보통'],['P3','P3 · 낮음']],state.taskPriority)}${select('예정일','task-date',[['','모든 날짜'],['today','오늘'],['week','이번 주 (월~일)'],['overdue','오늘 이전'],['undated','예정일 미정'],['range','기간 지정']],state.taskDate)}${state.taskDate==='range'?`${field('예정일 시작','task-date-from',state.taskDateFrom,'date',state.taskDateTo?`max="${esc(state.taskDateTo)}"`:'')}${field('예정일 종료','task-date-to',state.taskDateTo,'date',state.taskDateFrom?`min="${esc(state.taskDateFrom)}"`:'')}`:''}`;
+}
+
 function kanbanCard(task) {
-  const minutes = data.logs.filter(log => log.task_id === task.id).reduce((sum, log) => sum + log.minutes, 0);
   return `<article class="kanban-card" data-priority="${esc(task.priority)}" draggable="true" data-task-card="${esc(task.id)}" aria-label="${esc(task.title)}">
-    <div class="kanban-card-top"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category || '미분류')}</span>${task.status!=='archived'?button('archive-task','보관',task.id,'button-archive'):''}<span class="drag-hint" aria-hidden="true">⠿</span></div>
-    <h3>${esc(task.title)}</h3><p class="task-detail">${esc(task.detail)}</p>
-    <div class="kanban-card-body"><div class="kanban-meta"><span>예정일 ${esc(task.due || '미정')}</span><span>예상 ${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</span><span>진행도 ${esc(task.progress ?? (task.status==='done'?100:0))}%</span><strong>오늘 기록 ${duration(minutes)}</strong></div>
-    <div class="kanban-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></div></article>`;
+    <div class="kanban-card-top"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category || '미분류')}</span></div>
+    <h3>${esc(task.title)}</h3>
+    <div class="kanban-actions">${task.status!=='archived'?button('archive-task','보관',task.id):''}${button('log-task','기록',task.id)}${button('edit-task','수정',task.id)}${button('task-detail','내용',task.id)}</div></article>`;
+}
+
+function showTaskDetail(id) {
+  const task = data.tasks.find(task => task.id === id);
+  if (!task) throw new Error('업무를 찾을 수 없습니다.');
+  const minutes = data.logs.filter(log => log.task_id === id).reduce((sum, log) => sum + log.minutes, 0);
+  showDialog(task.title,
+    `<div class="task-preview-meta"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category || '미분류')}</span><span>${esc(labels[task.status])}</span></div><h3>메모</h3><div class="task-preview-detail">${taskDetailLines(task.detail)||'<p class="subtle-label">메모가 없습니다.</p>'}</div><dl class="task-preview-facts"><div><dt>예정일</dt><dd>${esc(task.due || '미정')}</dd></div><div><dt>예상 소요시간</dt><dd>${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</dd></div><div><dt>진행도</dt><dd>${esc(task.progress ?? (task.status==='done'?100:0))}%</dd></div><div><dt>오늘 기록</dt><dd>${duration(minutes)}</dd></div></dl>${button('close','닫기')}`);
 }
 
 function kanbanBoard(tasks) {
@@ -397,7 +446,7 @@ function materialsView() {
 
 function timeView() {
   const a = data.attendance;
-  return `<div class="records-grid">${weeklyCard()}<section class="card"><div class="card-heading"><h2>오늘의 근무</h2><span>${duration(a.today_minutes)}</span></div><div class="week-bars">${a.daily.map((row,index)=>`<div class="week-bar ${row.date===data.today?'current':''}"><span class="bar-label">${(row.minutes/60).toFixed(1)}h</span><div class="bar" style="height:${Math.min(100,row.minutes/720*100)}%"></div></div>`).join('')}</div><div class="week-days">${['월','화','수','목','금','토','일'].map(label=>`<span>${label}</span>`).join('')}</div><div class="row-actions">${button('manual-time','근무 수동 입력')}${button('attendance-history','변경 이력')}${button('payroll','급여 대조')}</div></section></div><section class="card wide-card"><div class="card-heading"><h2>출퇴근 기록</h2><span class="subtle-label">휴게는 명시적으로 입력한 구간만 차감</span></div>${data.sessions.map(session=>`<div class="timeline-item"><div><strong>${esc(localTime(session.start))} → ${session.end?esc(localTime(session.end)):'근무 중'}</strong><small>${session.source==='manual'||session.corrections.length?'수동 입력':'출퇴근 기록'} · 휴게 ${session.breaks.length}구간 · 정정 ${session.corrections.length}회</small></div>${button('correct-time','정정',session.id)}</div>`).join('')||empty('출근을 기록하면 이곳에 표시됩니다.')}</section><section class="card wide-card"><div class="card-heading"><h2>급여 입금 대조</h2>${button('payroll','월별 입력')}</div>${data.payroll.map(row=>`<div class="timeline-item"><span>${esc(row.month)}</span><div><strong>예상 ${money(row.expected_net)} / 입금 ${row.received_net===null?'미확인':money(row.received_net)}</strong><small>${row.difference===null?'입금 확인 대기':`차이 ${money(row.difference)}`} · ${esc(row.note)}</small></div>${button('payroll','수정',row.month)}</div>`).join('')||empty('예상 실수령액과 실제 입금액을 직접 입력해 비교하세요.')}</section>`;
+  return `<div class="records-grid">${weeklyCard()}<section class="card"><div class="card-heading"><h2>오늘의 근무</h2><span>${duration(a.today_minutes)}</span></div><div class="week-bars">${a.daily.map((row,index)=>`<div class="week-bar ${row.date===data.today?'current':''}"><span class="bar-label">${(row.minutes/60).toFixed(1)}h</span><div class="bar" style="height:${Math.min(100,row.minutes/720*100)}%"></div></div>`).join('')}</div><div class="week-days">${['월','화','수','목','금','토','일'].map(label=>`<span>${label}</span>`).join('')}</div><div class="row-actions">${button('manual-time','근무 수동 입력')}${button('attendance-history','변경 이력')}${button('payroll','급여 대조')}</div></section></div><section class="card wide-card"><div class="card-heading"><h2>출퇴근 기록</h2><span class="subtle-label">${data.attendance_rules?.enabled?'설정한 제외 구간과 직접 입력한 휴게를 합쳐 차감':'휴게는 명시적으로 입력한 구간만 차감'}</span></div>${data.sessions.map(session=>`<div class="timeline-item"><div><strong>${esc(localTime(session.start))} → ${session.end?esc(localTime(session.end)):'근무 중'}</strong><small>${session.source==='manual'?'수동 입력':'출퇴근 기록'} · ${session.overtime?'야근':'일반'} · 휴게 ${session.breaks.length}구간 · 정정 ${session.corrections.length}회</small></div><div class="row-actions">${button('toggle-overtime',session.overtime?'야근 해제':'야근 지정',session.id)}${button('correct-time','정정',session.id)}</div></div>`).join('')||empty('출근을 기록하면 이곳에 표시됩니다.')}</section><section class="card wide-card"><div class="card-heading"><h2>급여 입금 대조</h2>${button('payroll','월별 입력')}</div>${data.payroll.map(row=>`<div class="timeline-item"><span>${esc(row.month)}</span><div><strong>예상 ${money(row.expected_net)} / 입금 ${row.received_net===null?'미확인':money(row.received_net)}</strong><small>${row.difference===null?'입금 확인 대기':`차이 ${money(row.difference)}`} · ${esc(row.note)}</small></div>${button('payroll','수정',row.month)}</div>`).join('')||empty('예상 실수령액과 실제 입금액을 직접 입력해 비교하세요.')}</section>`;
 }
 
 function reportView() {
@@ -418,8 +467,45 @@ function recordsView() {
   return `${header('TIME & DAILY LOG','나의 기록','근무시간과 직접 기록한 업무 소요시간을 구분합니다.')}<div class="toolbar"><div class="tabs">${[['time','근무'],['report','일일 보고']].map(([id,label])=>`<button data-record="${id}" class="${state.recordTab===id?'active':''}">${label}</button>`).join('')}</div></div>${state.recordTab==='time'?timeView():reportView()}`;
 }
 
+const vaultKinds = {credential:'로그인 정보','payment-method':'결제수단 참조',person:'개인정보'};
+
+function vaultView() {
+  return `<section class="card wide-card"><div class="card-heading"><h2>보관함 목록</h2><span class="subtle-label">보기는 최대 30초</span></div><div class="vault-filters">${field('별칭 · 카드 끝 네 자리 검색','vault-query',state.vaultQuery,'search','autocomplete="off" maxlength="100"')}${select('유형','vault-kind',[['','전체 유형'],...Object.entries(vaultKinds)],state.vaultKind)}</div><div id="vault-results">${vaultResults()}</div></section>`;
+}
+
+function vaultResults() {
+  const query = state.vaultQuery.trim().toLocaleLowerCase();
+  const entries = data.vault.filter(entry => (!state.vaultKind || entry.kind === state.vaultKind) &&
+    `${entry.alias} ${entry.hint}`.toLocaleLowerCase().includes(query))
+    .sort((a,b) => a.alias.localeCompare(b.alias,'ko') || a.id.localeCompare(b.id));
+  const pages = Math.max(1,Math.ceil(entries.length / 10));
+  state.vaultPage = Math.max(0,Math.min(state.vaultPage,pages-1));
+  const rows = entries.slice(state.vaultPage*10,state.vaultPage*10+10);
+  return `<div class="vault-list">${rows.map(entry=>`<div class="vault-row"><div><strong>${esc(entry.alias)}</strong><small>${esc(vaultKinds[entry.kind] || entry.kind)} · ${esc(entry.hint)}</small></div><div class="row-actions">${button('reveal-secret','보기',entry.id)}${button('delete-secret','삭제',entry.id)}</div></div>`).join('')||empty('조건에 맞는 항목이 없습니다.')}</div><div class="vault-pagination"><span>${entries.length}건 / 전체 ${data.vault.length}건 · ${state.vaultPage+1}/${pages}쪽</span><div class="row-actions"><button class="button button-outline" data-action="vault-prev" ${state.vaultPage===0?'disabled':''}>이전</button><button class="button button-outline" data-action="vault-next" ${state.vaultPage>=pages-1?'disabled':''}>다음</button></div></div>`;
+}
+
+document.addEventListener('input', event => {
+  if (event.target.name !== 'vault-query') return;
+  state.vaultQuery = event.target.value;
+  state.vaultPage = 0;
+  document.getElementById('vault-results').innerHTML = vaultResults();
+});
+document.addEventListener('change', event => {
+  if (event.target.name !== 'vault-kind') return;
+  state.vaultKind = event.target.value;
+  state.vaultPage = 0;
+  document.getElementById('vault-results').innerHTML = vaultResults();
+});
+
+function attendanceRulesSettings() {
+  const rules = data.attendance_rules || {};
+  const toggle = (label,key,fallback=true) => select(label,key,[['true','적용'],['false','적용 안 함']],String(rules[key] ?? fallback));
+  const clock = (label,key,fallback) => field(label,key,rules[key] || fallback,'text','required inputmode="numeric" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="5" placeholder="HH:MM"');
+  return `<section class="card wide-card"><div class="card-heading"><h2>근무시간 기록 기본설정</h2></div><form data-form="attendance-rules"><p class="subtle-label">출퇴근 원본 시각은 보존하고 합계에서만 제외합니다. 저장하면 기존 출퇴근 기록의 일·주간 합계와 새로 생성하는 보고서의 근무시간에도 적용합니다. 이미 저장한 보고서는 자동 변경하지 않습니다.</p>${toggle('산정 규칙 사용','enabled',false)}<div class="attendance-rule-grid"><fieldset><legend>이른 출근</legend>${toggle('기준 시각 이전 제외','early_enabled')}${clock('근무 인정 시작 (24시간제)','earliest_start','08:00')}</fieldset><fieldset><legend>고정 휴게</legend>${toggle('고정 휴게 제외','lunch_enabled')}${clock('휴게 시작','lunch_start','12:00')}${clock('휴게 종료','lunch_end','13:00')}</fieldset><fieldset><legend>퇴근 준비</legend>${toggle('퇴근 준비시간 제외','preparation_enabled')}${clock('준비 시작','preparation_start','17:00')}${clock('준비 종료','preparation_end','17:30')}<p class="subtle-label">야근으로 지정한 기록에서는 이 구간을 근무시간으로 인정합니다. 직접 기록한 휴게는 계속 차감합니다.</p></fieldset></div><p class="subtle-label">고정 제외와 수동 휴게가 겹쳐도 한 번만 차감합니다. 기본은 규칙 미적용입니다.</p><div class="row-actions">${button('attendance-rules-preset','사내 기준 채우기')}<button class="button button-primary" type="submit">근무 기본설정 저장</button></div></form></section>`;
+}
+
 function settingsView() {
-  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div><section class="card wide-card"><div class="card-heading"><h2>보관함 목록</h2><span class="subtle-label">로그인 정보는 30초 동안 보기 가능</span></div>${data.vault.map(entry=>`<div class="timeline-item"><div><strong>${esc(entry.alias)}</strong><small>${esc(entry.kind)} · ${esc(entry.hint)}</small></div><div class="row-actions">${entry.kind==='credential'?button('reveal-secret','보기',entry.id):''}${button('delete-secret','삭제',entry.id)}</div></div>`).join('')||empty('저장된 민감정보가 없습니다.')}</section>${personalSettings()}`;
+  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${field('자동 잠금 대기 시간 (분)','idle_minutes',data.settings.idle_minutes ?? 15,'number','min="1" max="240" step="1" required')}<p class="subtle-label">1~240분 · 기본 15분 · 조회 자동 갱신은 대기 시간을 연장하지 않습니다.</p>${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div>${attendanceRulesSettings()}${vaultView()}${personalSettings()}`;
 }
 
 function personalSettings() {
@@ -488,18 +574,81 @@ async function personalAction(action, id) {
   return false;
 }
 
+function helpView() {
+  const topics = [['intro','후임 소개'],['start','빠른 시작'],['tasks','업무'],['materials','구매·재고'],['attendance','근무 기록'],['reports','일일 보고'],['vault','민감정보 보관함'],['manage','관리·문제 해결']];
+  return `${header('WHOIAM GUIDE','whoiam(후임) 도움말','반복되는 일을 챙기고, 하루의 기록을 다음 할 일로 연결합니다.')}
+    <div class="help-layout"><nav class="card help-topics" aria-label="도움말 목차"><h2>사용 안내</h2>${topics.map(([id,label])=>`<button type="button" data-help-section="${id}">${label}</button>`).join('')}</nav><div class="help-articles">
+    <section class="card help-section" aria-labelledby="help-intro"><h2 id="help-intro" tabindex="-1">후임 소개</h2>
+      <p><strong>whoiam(후임)</strong>은 업무·구매·재고·근무 기록과 일일 보고를 연결하는 개인용 로컬 업무비서입니다. 한글 이름 ‘후임’에는 반복되는 일을 챙기는 업무 동료라는 뜻을 담았습니다.</p>
+      <p>웹브라우저는 조작 화면이고, 실제 처리는 같은 PC의 Python 서버에서 합니다. 현재 실제 사용은 Windows 개인 계정 기준이며 인터넷 공개 서버나 여러 사용자의 동시 공유는 지원하지 않습니다.</p>
+      <p>이 안내는 앱에 포함되어 인터넷 없이 볼 수 있습니다. 잠금을 해제하지 않아도 도움말을 읽을 수 있습니다.</p></section>
+    <section class="card help-section" aria-labelledby="help-start"><h2 id="help-start" tabindex="-1">빠른 시작</h2>
+      <ol><li><strong>실행·잠금 해제:</strong> 서버가 자동으로 연 브라우저에서 잠금을 해제합니다. 처음 사용하는 PC는 빈 저장소로 시작합니다.</li>
+      <li><strong>출근:</strong> 홈의 출근 버튼 또는 명령 입력란에 ‘출근’을 입력합니다. 출근 기록과 오늘 챙길 일을 확인합니다.</li>
+      <li><strong>업무 중:</strong> 업무를 추가하고 진행 상태·소요시간·수행 결과를 기록합니다. 필요할 때 휴게 시작·종료도 남깁니다.</li>
+      <li><strong>퇴근:</strong> 야근 여부를 선택하고 퇴근을 기록합니다. 생성된 일일 보고를 확인·편집한 뒤 저장하고 PNG 또는 텍스트로 공유합니다.</li></ol>
+      <p>설정의 <strong>근무시간 기록 기본설정</strong>에서 회사 기준을 먼저 저장하면 합계에 반영됩니다. 데모는 가상 데이터를 메모리에만 보관하며 종료하면 사라집니다.</p>
+      <button class="button button-outline" data-nav="home">홈 열기</button></section>
+    <section class="card help-section" aria-labelledby="help-tasks"><h2 id="help-tasks" tabindex="-1">업무 · 리스트와 칸반</h2>
+      <ul><li><strong>추가·수정:</strong> 제목, 줄별 메모, 분류, 우선순위(P1 높음 / P2 보통 / P3 낮음), 예정일, 예상 소요시간(분), 진행도를 입력합니다.</li>
+      <li><strong>필터:</strong> 상태·분류·우선순위·예정일을 함께 선택합니다. 예정일은 오늘·이번 주(월~일)·오늘 이전·미정·기간 지정으로 좁힐 수 있습니다. 리스트와 칸반 전환 시 조건을 유지합니다.</li>
+      <li><strong>칸반:</strong> 카드를 드래그해 상태를 옮깁니다. 터치·키보드에서는 수정을 사용합니다. ‘내용’에서 상세를 열고 닫기·Esc로 돌아옵니다.</li>
+      <li><strong>시간 기록:</strong> 입력할 때마다 소요시간이 <em>누적</em>됩니다. 잘못 입력했다면 아래 ‘오늘 입력한 업무 기록’의 ‘정정’을 사용합니다. 필터를 걸면 이 기록과 합계도 해당 조건으로 좁혀집니다.</li>
+      <li><strong>진행도·보관:</strong> 진행도는 직접 입력하며 상태 이동으로 자동 계산하지 않습니다. 완료한 업무도 보드에 남습니다. ‘보관’을 누르면 기본 보기에서 숨겨지고 ‘보관’ 필터에서 수정해 다시 꺼낼 수 있습니다.</li></ul>
+      <button class="button button-outline" data-nav="tasks">업무 열기</button></section>
+    <section class="card help-section" aria-labelledby="help-materials"><h2 id="help-materials" tabindex="-1">구매 · 재고</h2>
+      <p>물품 메뉴에서 품목을 등록하고 구매 내역에 판매처·배송 예정·알아보기 쉬운 메모를 남깁니다. 현재 구매와 배송 상태는 직접 입력·수정하며 판매처 자동 주문·실시간 배송 조회는 제공하지 않습니다.</p>
+      <p>입고 처리 시 재고 품목·수량과 포장당 수량을 확인합니다. 거래명세서·카드전표는 PDF·PNG·JPEG(개당 최대 5MB)로 첨부할 수 있습니다.</p>
+      <p>납땜·조립 소모는 BOM 버전을 등록한 뒤 보드 수량과 추가 손실을 입력하고 소요량을 미리 확인합니다. 일반 소모는 입출고 기록, 실제 수량과 다르면 실사 조정을 사용합니다.</p>
+      <button class="button button-outline" data-nav="materials">물품 열기</button></section>
+    <section class="card help-section" aria-labelledby="help-attendance"><h2 id="help-attendance" tabindex="-1">근무 기록 · 산정 규칙과 야근</h2>
+      <p>출근·휴게 시작·휴게 종료·퇴근으로 실제 시각을 기록합니다. 수동 입력은 날짜와 24시간제 시각을 사용하며 아직 지나지 않은 퇴근 예정 시각은 저장할 수 없습니다. 자정을 넘기면 퇴근 날짜를 다음 날로 지정합니다.</p>
+      <p>수동 입력은 겹치는 기존 기록 전체를 변경 이력에 보관하고 대체합니다. 정정 사유를 남기고 출퇴근 날짜·시각을 확인하세요.</p>
+      <ol><li>설정 → 근무시간 기록 기본설정 → <strong>사내 기준 채우기</strong> → <strong>근무 기본설정 저장</strong>을 누릅니다. 초기 상태는 미적용입니다.</li>
+      <li>기본 기준은 08:00 이전, 12:00~13:00 휴게, 17:00~17:30 준비시간 제외입니다. 각 기준의 시각과 적용 여부를 바꿀 수 있습니다.</li>
+      <li>기록마다 ‘야근 지정/해제’를 선택합니다. 수동 입력·정정 또는 퇴근 확인 화면에서도 선택할 수 있습니다. 야근이면 준비시간을 인정하지만 직접 입력한 휴게는 차감합니다.</li></ol>
+      <p>원본 시각은 유지하고 겹치는 제외·휴게는 한 번만 차감합니다. 규칙은 기존 기록의 일·주간 합계에도 적용되며 매일 한국 날짜 기준입니다. 자정을 넘긴 다음 날의 이른 시간도 제외될 수 있습니다.</p>
+      <p>주간 합계는 월~일 기준이며 근무 중인 기록은 잠정값입니다. 주간 알림 기준은 설정에서 변경합니다. 급여 대조는 예상 실수령액과 실제 입금액을 직접 입력해 비교하는 기능입니다.</p>
+      <button class="button button-outline" data-record="time">근무 기록 열기</button></section>
+    <section class="card help-section" aria-labelledby="help-reports"><h2 id="help-reports" tabindex="-1">일일 보고 · PNG와 텍스트</h2>
+      <p>기록 → 일일 보고에서 날짜를 선택하고 초안을 생성합니다. 해당 날짜의 업무 로그가 진행사항으로 모이며 미완료 업무는 예정사항에 들어갑니다. 내용·소요시간·계획을 편집한 뒤 <strong>보고서 저장</strong>을 누릅니다.</p>
+      <p>PNG는 진행·예정사항을 한 장으로 보여주고, 상세내용은 입력한 줄마다 점으로 구분합니다. 아래 텍스트 보고는 <strong>당일 진행 업무만</strong> 포함하며 복사 버튼으로 가져갈 수 있습니다. 예정업무는 텍스트에 포함하지 않습니다.</p>
+      <p>보고의 업무별 소요시간은 직접 기록한 값의 합계로, 출퇴근으로 계산한 근무시간과 다를 수 있습니다. 근무 산정 규칙을 바꿔도 이미 저장한 보고서는 자동 수정되지 않습니다. 필요하면 다시 생성·편집·저장하세요.</p>
+      <button class="button button-outline" data-record="report">일일 보고 열기</button></section>
+    <section class="card help-section" aria-labelledby="help-vault"><h2 id="help-vault" tabindex="-1">민감정보 보관함</h2>
+      <p>설정에서 로그인 정보·결제수단 참조·개인정보를 등록합니다. 목록은 별칭·마스킹만 표시하며 별칭·카드 끝 네 자리 검색과 유형 필터로 찾고 10건씩 넘겨 봅니다.</p>
+      <p>‘보기’는 선택한 한 건을 최대 30초 표시합니다. 닫기·Esc·다른 창/탭 이동·잠금 시 숨깁니다. 전체 카드번호·CVC·PIN은 입력하지 않습니다.</p>
+      <p>자동 잠금 시간은 설정 → 기본 설정에서 1~240분(기본 15분)으로 저장합니다. 목록 자동 갱신과 자동 백업은 잠금 대기 시간을 연장하지 않습니다.</p>
+      <button class="button button-outline" data-nav="settings">설정 열기</button></section>
+    <section class="card help-section" aria-labelledby="help-manage"><h2 id="help-manage" tabindex="-1">관리 · 문제 해결</h2>
+      <details open><summary>실행·업데이트·연결 오류</summary><p>프로젝트 폴더에서 다음을 실행합니다. 서버 창을 닫거나 앱을 종료하면 다시 실행해야 합니다.</p><pre><code>.\\.venv\\Scripts\\python.exe -m apps.server</code></pre>
+      <p>화면 변경은 새로고침, 서버/API 변경은 종료 후 재실행이 필요합니다. ‘로컬 화면을 다시 열어주세요’가 나오면 서버가 자동으로 연 브라우저를 사용하세요. 기본 주소는 http://127.0.0.1:4173입니다.</p>
+      <p>설정 → 앱 종료로 정상 종료하거나 서버 터미널에서 Ctrl+C를 누릅니다. 다른 프로그램을 임의로 종료하지 말고, 포트가 사용 중이면 기존 후임 서버 실행 여부를 확인하세요.</p></details>
+      <details><summary>데이터 위치·백업·다른 PC 복구</summary><p>기본 운영 데이터는 %LOCALAPPDATA%\\Whoiam\\.private\\production\\에 암호화 저장됩니다. 키는 Windows 계정의 OS 보안 저장소에 별도로 보관합니다. 개발·테스트 프로필은 분리됩니다.</p>
+      <p>설정 → 개인 실사용 관리에서 지금 백업·백업 목록·복원을 사용합니다. 변경 후 약 5분 이내 및 잠금·정상 종료 전 자동 백업합니다. 같은 디스크의 백업은 PC 고장에 대비한 별도 사본을 대신하지 않습니다.</p>
+      <p>다른 PC로 옮길 때는 소스만 복사해도 기존 데이터가 따라오지 않습니다. 암호화 DB 백업·별도 복구 파일(.whoiam-recovery)·복구 암호가 필요합니다. 앱을 종료하고 배포 폴더의 <code>docs/personal-service.md</code>에 있는 복구 절차를 따릅니다. 복구 암호는 터미널에서 직접 입력합니다.</p></details>
+      <details><summary>설치·지원 범위</summary><p>Windows와 Python 3.11 이상을 사용합니다. 새 PC 설치는 배포 폴더의 <code>docs/setup.md</code>에 CLI AI에게 붙여 넣을 요청문과 함께 안내되어 있습니다. ZIP은 독립 실행 EXE가 아니므로 Python과 의존성이 필요합니다.</p>
+      <p>설정에서 현재 사용자 로그인 시 자동 실행을 관리할 수 있습니다. 운영 정보·키·복구 파일을 GitHub나 배포 ZIP에 넣지 마세요. 판매처 자동 구매·실시간 배송 조회·급여 세금 계산·MCU 펌웨어는 후속 범위입니다.</p></details>
+    </section></div></div>`;
+}
+
 function render() {
   document.getElementById('desktop-nav').innerHTML = navMarkup();
   document.getElementById('mobile-nav').innerHTML = navMarkup();
-  document.getElementById('breadcrumb-current').textContent = navItems.find(row => row[0] === state
+  document.getElementById('breadcrumb-current').textContent = pageItems.find(row => row[0] === state
     .page)[1];
   document.getElementById('view-toggle').innerHTML = icon(state.compact ? 'desktop' : 'phone');
   document.querySelector('.workspace-footer').innerHTML =
-    `<span><span class="tiny-dot"></span>${connection.demo?'임시 데모 · 가상 데이터만 사용하세요':connection.locked?'로컬 작업 공간 · 잠김':'로컬 암호화 저장 · 외부 전송 없음'}</span><span>whoiam · v0.04</span>`;
+    `<span><span class="tiny-dot"></span>${connection.demo?'임시 데모 · 가상 데이터만 사용하세요':connection.locked?'로컬 작업 공간 · 잠김':'로컬 암호화 저장 · 외부 전송 없음'}</span><span>whoiam(후임) · v0.05</span>`;
   document.querySelector('.device-status').innerHTML =
     `<span class="node-dot"></span>${esc({production:'운영',development:'개발',test:'테스트',demo:'임시 데모'}[connection.profile] || (connection.demo?'임시 데모':'로컬 장치'))}`;
   const main = document.getElementById('main-content');
-  if (connection.error) main.innerHTML =
+  document.querySelectorAll('[data-nav="help"]').forEach(button => {
+    if (state.page === 'help') button.setAttribute('aria-current','page');
+    else button.removeAttribute('aria-current');
+  });
+  if (state.page === 'help') main.innerHTML = helpView();
+  else if (connection.error) main.innerHTML =
     `${header('LOCAL WORKSPACE','로컬 서버에 연결해주세요.','실제 기능은 Python 로컬 서버에서 실행됩니다.')}<section class="card wide-card"><p>${esc(connection.error)}</p><pre>python -m apps.server --demo=True</pre><p>가상 데이터로 기능을 확인하거나, 데모 옵션 없이 실행해 OS 보안 저장소를 연결할 수 있습니다.</p>${button('retry','다시 연결')}</section>`;
   else if (connection.locked || !data) main.innerHTML =
     `${header('LOCAL & PRIVATE','작업 공간이 잠겨 있습니다.','현재 OS 계정의 보안 키 저장소로 잠금을 해제합니다.')}<section class="card wide-card"><p>잠금을 해제하면 로컬 업무 기록을 사용할 수 있습니다.</p>${button('unlock','잠금 해제','','button-primary')}</section>`;
@@ -514,12 +663,12 @@ function render() {
     main.innerHTML = views[state.page]();
     if (state.page === 'records' && state.recordTab === 'report') window.WhoiamReport.mount();
   }
-  document.title = `${navItems.find(row=>row[0]===state.page)[1]} · WHOIAM 업무 콘솔`;
+  document.title = `${pageItems.find(row=>row[0]===state.page)[1]} · whoiam(후임)`;
 }
 
 function navigate(page) {
   hideCredentialView();
-  state.page = navItems.some(row => row[0] === page) ? page : 'home';
+  state.page = pageItems.some(row => row[0] === page) ? page : 'home';
   location.hash = state.page;
   render();
   window.scrollTo({
@@ -566,9 +715,9 @@ function hideCredentialView() {
 }
 
 async function showCredential(id) {
-  const entry = data?.vault.find(row => row.id === id && row.kind === 'credential');
+  const entry = data?.vault.find(row => row.id === id);
   if (!entry || connection.locked) return;
-  showDialog(`${entry.alias} · 로그인 정보`, '<div id="credential-preview"><p>로그인 정보를 불러오고 있습니다.</p></div>');
+  showDialog(`${entry.alias} · 정보 보기`, '<div id="credential-preview"><p>정보를 불러오고 있습니다.</p></div>');
   credentialViewActive = true;
   const generation = credentialViewGeneration;
   credentialViewTimer = setTimeout(hideCredentialView, 30000);
@@ -577,13 +726,17 @@ async function showCredential(id) {
     const dialog = document.getElementById('flow-dialog');
     if (generation !== credentialViewGeneration || !dialog.open || document.hidden || connection.locked) return;
     const preview = document.getElementById('credential-preview');
-    preview.innerHTML = '<p class="subtle-label">30초 후 자동으로 숨깁니다. 다른 창·탭으로 이동해도 숨깁니다.</p><div class="credential-value"><strong>ID</strong><pre id="credential-username"></pre></div><div class="credential-value"><strong>비밀번호</strong><pre id="credential-password"></pre></div>' + button('close', '지금 숨기기');
-    document.getElementById('credential-username').textContent = values.username;
-    document.getElementById('credential-password').textContent = values.password;
+    const columns = {
+      credential: [['username','ID'],['password','비밀번호']],
+      'payment-method': [['issuer','카드사'],['last_four','끝 네 자리'],['token','결제 서비스 참조 토큰']],
+      person: [['name','이름'],['email','이메일'],['phone','연락처'],['address','주소']],
+    }[entry.kind] || [];
+    preview.innerHTML = '<p class="subtle-label">30초 후 자동으로 숨깁니다. 다른 창·탭으로 이동해도 숨깁니다.</p>' + columns.map(([key,label]) => `<div class="credential-value"><strong>${label}</strong><pre id="credential-${key}"></pre></div>`).join('') + button('close', '지금 숨기기');
+    columns.forEach(([key]) => {document.getElementById(`credential-${key}`).textContent = values[key] || '미입력';});
   } catch (error) {
     if (generation !== credentialViewGeneration) return;
     closeDialog();
-    toast(error.message || '로그인 정보를 조회하지 못했습니다.');
+    toast(error.message || '정보를 조회하지 못했습니다.');
   }
 }
 
@@ -596,7 +749,7 @@ function bomLine() {
 }
 
 function taskEstimateFields(task) {
-  return `${field('예상 소요시간 (분)','estimated_minutes',task.estimated_minutes ?? '', 'number','min="0" max="525600" step="1" placeholder="미입력"')}${field('진행도 (%)','progress',task.progress ?? (task.status==='done'?100:0),'number','required min="0" max="100" step="1"')}<p class="subtle-label">예상시간과 진행도는 직접 입력한 값이며, 상태 이동이나 시간 기록으로 자동 계산하지 않습니다.</p>`;
+  return `${field('예상 소요시간 (분)','estimated_minutes',task.estimated_minutes ?? '', 'text','inputmode="numeric" pattern="[0-9]{1,6}" maxlength="6" placeholder="미입력"')}${field('진행도 (%)','progress',task.progress ?? (task.status==='done'?100:0),'text','required inputmode="numeric" pattern="(100|[0-9]{1,2})" maxlength="3"')}<p class="subtle-label">예상시간은 0~525600분, 진행도는 0~100%입니다. 직접 입력하며 상태 이동이나 시간 기록으로 자동 계산하지 않습니다.</p>`;
 }
 
 function showTask(id = '') {
@@ -619,9 +772,9 @@ function showOrder(id) {
 
 function showTime(id = '', version = null) {
   const session = version || data.sessions.find(s => s.id === id);
-  const breaks = session ? session.breaks : [defaultLunch(data.today)];
+  const breaks = session ? session.breaks : data.attendance_rules?.enabled ? [] : [defaultLunch(data.today)];
   showDialog(version ? '이력으로 근무 다시 입력' : id ? '근무 기록 정정' : '근무 수동 입력',
-    `<p class="subtle-label">수동 입력이 우선합니다. 겹치는 기존 근무 기록 전체는 이력으로 보관하고 지금 입력한 근무·휴게로 대체합니다. 기본 휴게는 12:00~13:00이며 출퇴근에 걸쳐도 근무와 겹치는 시간만 차감합니다. 아직 지나지 않은 퇴근 예정 시각은 저장할 수 없습니다.</p>${field('출근 시각 (한국 시간)','session_start',localInput(session?.start),'datetime-local','required')}${field('퇴근 시각 (한국 시간)','session_end',localInput(session?.end),'datetime-local','required')}<p id="manual-time-preview" class="subtle-label" role="status" aria-live="polite">${esc(manualTimeSummary(localInput(session?.start),localInput(session?.end),id))}</p><div id="manual-breaks">${breaks.map(interval=>breakLine(interval,!session)).join('')}</div>${button('add-break','휴게 구간 추가')}${area('입력·정정 사유','reason',version?'이력에서 다시 입력':'')}`,
+    `<p class="subtle-label">수동 입력이 우선합니다. 겹치는 기존 근무 기록 전체는 이력으로 보관하고 지금 입력한 근무·휴게로 대체합니다. ${data.attendance_rules?.enabled?'설정된 산정 규칙을 합계에 적용합니다. 추가 휴게만 아래에 입력하세요.':'기본 휴게는 12:00~13:00이며 출퇴근에 걸쳐도 근무와 겹치는 시간만 차감합니다.'} 아직 지나지 않은 퇴근 예정 시각은 저장할 수 없습니다.</p>${field('출근 시각 (한국 시간)','session_start',localInput(session?.start),'datetime-local','required')}${field('퇴근 시각 (한국 시간)','session_end',localInput(session?.end),'datetime-local','required')}<p id="manual-time-preview" class="subtle-label" role="status" aria-live="polite">${esc(manualTimeSummary(localInput(session?.start),localInput(session?.end),id))}</p><div id="manual-breaks">${breaks.map(interval=>breakLine(interval,!session)).join('')}</div>${button('add-break','휴게 구간 추가')}${select('야근 여부','overtime',[['false','일반 근무'],['true','야근 · 퇴근 준비시간 인정']],String(session?.overtime || false))}${area('입력·정정 사유','reason',version?'이력에서 다시 입력':'')}`,
     'time', id);
 }
 
@@ -739,8 +892,29 @@ async function act(action, id) {
     return;
   }
   if (!data) throw new Error('먼저 작업 공간의 잠금을 해제해주세요.');
+  if (action === 'vault-prev' || action === 'vault-next') {
+    state.vaultPage += action === 'vault-next' ? 1 : -1;
+    document.getElementById('vault-results').innerHTML = vaultResults();
+    return;
+  }
+  if (action === 'attendance-rules-preset') {
+    const form = document.querySelector('[data-form="attendance-rules"]');
+    const preset = {enabled:'true',early_enabled:'true',earliest_start:'08:00',lunch_enabled:'true',lunch_start:'12:00',lunch_end:'13:00',preparation_enabled:'true',preparation_start:'17:00',preparation_end:'17:30'};
+    Object.entries(preset).forEach(([key,value]) => {form.elements.namedItem(key).value=value;});
+    return;
+  }
+  if (action === 'toggle-overtime') {
+    const session = data.sessions.find(row => row.id === id);
+    await run('attendance.overtime', {id, overtime:!session.overtime});
+    render();
+    return;
+  }
   if (action === 'archive-task') {
     await moveTask(id, 'archived');
+    return;
+  }
+  if (action === 'task-detail') {
+    showTaskDetail(id);
     return;
   }
   if (action === 'navigate-target') {
@@ -757,11 +931,14 @@ async function act(action, id) {
   }
   if (action === 'finish') {
     showDialog('퇴근 전 확인',
-      `<p>오늘 근무 ${duration(data.attendance.today_minutes)} · 주간 ${duration(data.attendance.week_minutes)}</p>${alertList()}<p>퇴근 시 실제 기록으로 일일 업무보고 초안을 생성합니다.</p>${button('confirm-finish','퇴근 기록·보고서 생성','','button-primary')}${button('close','돌아가기')}`
+      `<p>오늘 근무 ${duration(data.attendance.today_minutes)} · 주간 ${duration(data.attendance.week_minutes)}</p>${alertList()}${select('이 근무 기록의 야근 여부','finish-overtime',[['false','일반 근무'],['true','야근 · 퇴근 준비시간 인정']],String(data.attendance.active?.overtime || false))}<p>퇴근 시 실제 기록으로 일일 업무보고 초안을 생성합니다.</p>${button('confirm-finish','퇴근 기록·보고서 생성','','button-primary')}${button('close','돌아가기')}`
     );
     return;
   }
   if (action === 'confirm-finish') {
+    const active = data.attendance.active;
+    const overtime = document.querySelector('[name="finish-overtime"]')?.value === 'true';
+    if (active && Boolean(active.overtime) !== overtime) await run('attendance.overtime', {id:active.id,overtime});
     const result = await run('core.finish');
     closeDialog();
     if (result.report) {
@@ -948,6 +1125,12 @@ document.addEventListener('click', event => {
   const target = event.target.closest('button');
   if (!target) return;
   if (window.WhoiamReport.handleAction(target)) return;
+  if (target.dataset.helpSection) {
+    const heading = document.getElementById(`help-${target.dataset.helpSection}`);
+    heading?.scrollIntoView({behavior:'instant',block:'start'});
+    heading?.focus({preventScroll:true});
+    return;
+  }
   if (target.dataset.nav) {
     navigate(target.dataset.nav);
     return;
@@ -1121,6 +1304,7 @@ document.addEventListener('submit', async event => {
         start: zoned(start),
         end: zoned(end),
         breaks,
+        overtime: values.overtime === 'true',
         reason
       });
       closeDialog();
@@ -1141,10 +1325,19 @@ document.addEventListener('submit', async event => {
       delete values['secret-kind'];
       await run('sensitive.save', values);
     }
+    if (type === 'attendance-rules') {
+      const rules = {...values};
+      for (const key of ['enabled','early_enabled','lunch_enabled','preparation_enabled']) rules[key] = values[key] === 'true';
+      await run('attendance.rules', rules);
+      render();
+      toast('근무시간 산정 기준을 저장했습니다. 기존 기록 합계에도 적용됩니다.');
+      return;
+    }
     if (type === 'settings') {
       await run('core.settings', {
         weekly_limit: Math.round(Number(values.weekly_hours) * 60),
-        notifications: values.notifications === 'true'
+        notifications: values.notifications === 'true',
+        idle_minutes: Number(values.idle_minutes)
       });
       render();
       toast('설정을 저장했습니다.');
@@ -1167,6 +1360,16 @@ document.addEventListener('submit', async event => {
 });
 document.addEventListener('change', async event => {
   const input = event.target;
+  const taskFilters = {'task-priority':'taskPriority','task-date':'taskDate','task-date-from':'taskDateFrom','task-date-to':'taskDateTo'};
+  if (taskFilters[input.name]) {
+    if (input.name.startsWith('task-date-') && !input.checkValidity()) {
+      input.reportValidity();
+      return;
+    }
+    state[taskFilters[input.name]] = input.value;
+    render();
+    return;
+  }
   if (input.name === 'task-category') {
     state.taskCategory = input.value;
     render();
@@ -1246,7 +1449,7 @@ document.getElementById('flow-dialog').addEventListener('close', () => {
 window.addEventListener('hashchange', () => {
   hideCredentialView();
   const page = location.hash.slice(1);
-  if (navItems.some(row => row[0] === page) && page !== state.page) {
+  if (pageItems.some(row => row[0] === page) && page !== state.page) {
     state.page = page;
     render();
   }
@@ -1266,11 +1469,11 @@ async function boot() {
     render();
   }
 }
-if (navItems.some(row => row[0] === location.hash.slice(1))) state.page = location.hash.slice(1);
+if (pageItems.some(row => row[0] === location.hash.slice(1))) state.page = location.hash.slice(1);
 async function poll() {
   if (state.busy || state.draggedTask) return;
   try {
-    if (document.hidden || document.getElementById('flow-dialog').open) {
+    if (state.page === 'help' || document.hidden || document.getElementById('flow-dialog').open) {
       const status = await api('status');
       connection = {
         ...connection,
@@ -1279,7 +1482,7 @@ async function poll() {
       if (status.locked) {
         data = null;
         clearPrivateView();
-        render();
+        if (state.page !== 'help') render();
       }
       return;
     }

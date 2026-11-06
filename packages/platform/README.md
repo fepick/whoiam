@@ -6,7 +6,7 @@ SQLite에 모듈 이름·불투명 ID·레코드 수와 암호문 길이·Fernet
 
 키는 keyring의 Windows Credential Locker·macOS Keychain·Secret Service·KWallet 중 지원 백엔드에만 저장합니다.
 평문·파일·자동 선택 체인 백엔드는 거부합니다. 기존 DB의 키가 없으면 새 키를 만들지 않습니다.
-키 참조는 유휴 15분 후 또는 명시적 잠금 시 해제됩니다. Python 메모리를 완전히 지운다는 보장은 하지 않습니다.
+키 참조는 설정한 유휴 시간(기본 15분, 1~240분) 후 또는 명시적 잠금 시 해제됩니다. Python 메모리를 완전히 지운다는 보장은 하지 않습니다.
 
 운영 데이터는 기본 `%LOCALAPPDATA%/Whoiam/.private/production/`에 저장하며 개발 checkout과 분리합니다.
 개발·테스트는 다른 경로와 다른 OS 키를 사용합니다. UUID로 키를 찾아 폴더 이동 후에도 같은 OS 계정에서 사용할 수 있습니다.

@@ -76,11 +76,11 @@ def test_release_uses_allowlist_and_manifest_without_history(tmp_path: Path) -> 
         assert not any(
             b"synthetic excluded fixture" in archive.read(name) for name in names
         )
-        manifest = json.loads(archive.read("whoiam-0.04/MANIFEST.json"))
+        manifest = json.loads(archive.read("whoiam-0.05/MANIFEST.json"))
         assert manifest["source_commit"] == result["source_commit"]
         for name, digest in manifest["files"].items():
             assert (
-                hashlib.sha256(archive.read(f"whoiam-0.04/{name}")).hexdigest()
+                hashlib.sha256(archive.read(f"whoiam-0.05/{name}")).hexdigest()
                 == digest
             )
     with pytest.raises(FileExistsError):

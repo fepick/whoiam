@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const MAX_ROWS = 100;
-  const REPORT_VERSION = '0.04';
+  const REPORT_VERSION = '0.05';
   const model = {
     date: '',
     daily: [],
@@ -152,7 +152,9 @@
       setFont(23, 650);
       const title = wrap(ctx, row.title, columns[1] - 38);
       setFont(19);
-      const detail = row.detail ? wrap(ctx, row.detail, columns[1] - 38) : [];
+      const detail = String(row.detail || '').split(/\r?\n/).map(value => value.trim()).filter(Boolean)
+        .flatMap(value => wrap(ctx, value.replace(/^[-•]\s+/, ''), columns[1] - 56)
+          .map((value, index) => ({value, bullet: index === 0})));
       return {
         ...row,
         titleLines: title,
@@ -262,8 +264,9 @@
           text(value, x + 19, textY, 23, 650);
           textY += 31;
         });
-        row.detailLines.forEach(value => {
-          text(value, x + 19, textY + 4, 19, 400, C.muted);
+        row.detailLines.forEach(({value, bullet}) => {
+          if (bullet) text('•', x + 19, textY + 4, 19, 400, C.muted);
+          text(value, x + 37, textY + 4, 19, 400, C.muted);
           textY += 27;
         });
         x += columns[1];
@@ -314,7 +317,7 @@
     line(72, footerY, 1056);
     text('소요시간·예상시간·진행도: 직접 입력 기준', 72, footerY + 27, 15, 400, '#8b9983');
     // 워터마크를 이미지 픽셀에 포함한다.
-    const attribution = '업무비서 whoiam';
+    const attribution = '업무비서 whoiam(후임)';
     const versionCredit = `버전 ${REPORT_VERSION} · powered by codex`;
     setFont(14, 500);
     text(attribution, 1128 - ctx.measureText(attribution).width, footerY + 24, 14, 500,

@@ -105,13 +105,8 @@ class Sensitive:
         identifier = text(data, "id", 64)
         with self.store.transaction():
             entry = self.entries.get(identifier)
-            if entry["kind"] != "credential":
-                raise DomainError("로그인 정보만 일시 조회할 수 있습니다.", 403)
-            self.record_audit("credential.reveal", identifier)
-            return {
-                "username": entry["values"]["username"],
-                "password": entry["values"]["password"],
-            }
+            self.record_audit(f"{entry['kind']}.reveal", identifier)
+            return dict(entry["values"])
 
     def upload(self, data: Json) -> Json:
         fields(data, {"name", "content", "kind"})

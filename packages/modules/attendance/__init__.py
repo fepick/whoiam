@@ -5,6 +5,12 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta
 from typing import Callable
 
+from packages.modules.attendance.rules import (
+    DEFAULT_RULES,
+    excluded_intervals,
+    validate_rules,
+    working_seconds,
+)
 from packages.platform.domain import (
     SEOUL,
     DomainError,
@@ -31,6 +37,46 @@ class Attendance:
         self.clock = clock
         self.sessions = store.scope("attendance.sessions")
         self.payroll = store.scope("attendance.payroll")
+        self.rules_repo = store.scope("attendance.rules")
+
+    def rules(self) -> Json:
+        rows = self.rules_repo.all()
+        return {
+            **DEFAULT_RULES,
+            **(
+                {key: value for key, value in rows[0].items() if key != "id"}
+                if rows
+                else {}
+            ),
+        }
+
+    def save_rules(self, data: Json) -> Json:
+        rules = validate_rules(data)
+        self.rules_repo.put({"id": "preferences", **rules})
+        return rules
+
+    def set_overtime(self, data: Json) -> Json:
+        fields(data, {"id", "overtime"})
+        if type(data.get("overtime")) is not bool:
+            raise DomainError("야근 여부를 확인해주세요.")
+        with self.store.transaction():
+            session = self.sessions.get(text(data, "id", 64))
+            if session.get("superseded_by"):
+                raise DomainError("이력에 보관된 기록은 변경할 수 없습니다.", 409)
+            if session.get("overtime", False) != data["overtime"]:
+                session.setdefault("corrections", []).append(
+                    {
+                        "at": self.clock().isoformat(),
+                        "reason": "야근 여부 변경",
+                        "previous": {
+                            key: session.get(key, False)
+                            for key in ("start", "end", "breaks", "overtime")
+                        },
+                    }
+                )
+                session["overtime"] = data["overtime"]
+                return self.sessions.put(session)
+            return session
 
     def list(self) -> list[Json]:
         return list(
@@ -57,6 +103,7 @@ class Attendance:
                         "start": session["start"],
                         "end": session["end"],
                         "breaks": session["breaks"],
+                        "overtime": session.get("overtime", False),
                         "at": session["superseded_at"],
                         "reason": session["superseded_reason"],
                         "kind": "replaced",
@@ -99,6 +146,7 @@ class Attendance:
                     "breaks": [],
                     "corrections": [],
                     "source": "clock",
+                    "overtime": False,
                 }
             )
         if active is None:
@@ -127,7 +175,9 @@ class Attendance:
             return self._record_manual(data)
 
     def _record_manual(self, data: Json) -> Json:
-        fields(data, {"id", "start", "end", "breaks", "reason"})
+        fields(data, {"id", "start", "end", "breaks", "reason", "overtime"})
+        if "overtime" in data and type(data["overtime"]) is not bool:
+            raise DomainError("야근 여부를 확인해주세요.")
         start, end = moment(text(data, "start", 40)), moment(text(data, "end", 40))
         if end <= start:
             raise DomainError(
@@ -182,7 +232,10 @@ class Attendance:
                 "at": now.isoformat(),
                 "reason": reason,
                 "previous": (
-                    {key: old[key] for key in ("start", "end", "breaks")}
+                    {
+                        **{key: old[key] for key in ("start", "end", "breaks")},
+                        "overtime": old.get("overtime", False),
+                    }
                     if old
                     else None
                 ),
@@ -205,6 +258,9 @@ class Attendance:
                 "breaks": normalized,
                 "corrections": corrections,
                 "source": "manual",
+                "overtime": data.get(
+                    "overtime", old.get("overtime", False) if old else False
+                ),
                 "replaces": list(
                     dict.fromkeys(
                         (old.get("replaces", []) if old else [])
@@ -214,19 +270,26 @@ class Attendance:
             }
         )
 
-    def seconds(self, session: Json, start: datetime, end: datetime) -> int:
+    def seconds(
+        self, session: Json, start: datetime, end: datetime, rules: Json | None = None
+    ) -> int:
         left = max(moment(session["start"]), start)
         right = min(moment(session["end"]) if session["end"] else self.clock(), end)
         if right <= left:
             return 0
-        seconds = (right - left).total_seconds()
+        excluded = excluded_intervals(
+            self.rules() if rules is None else rules,
+            left,
+            right,
+            session.get("overtime", False),
+        )
         for interval in session["breaks"]:
             break_left = max(moment(interval["start"]), left)
             break_right = min(
                 moment(interval["end"]) if interval["end"] else self.clock(), right
             )
-            seconds -= max(0, (break_right - break_left).total_seconds())
-        return int(seconds)
+            excluded.append((break_left, break_right))
+        return working_seconds(left, right, excluded)
 
     def summary(
         self, when: date | None = None, limit: int = DEFAULT_WEEKLY_MINUTES
@@ -235,11 +298,14 @@ class Attendance:
         monday = today - timedelta(days=today.weekday())
         beginning = datetime.combine(monday, time.min, SEOUL)
         sessions = self.list()
+        rules = self.rules()
         daily = []
         for offset in range(7):
             start = beginning + timedelta(days=offset)
             end = start + timedelta(days=1)
-            seconds = sum(self.seconds(session, start, end) for session in sessions)
+            seconds = sum(
+                self.seconds(session, start, end, rules) for session in sessions
+            )
             daily.append(
                 {
                     "date": start.date().isoformat(),
@@ -261,6 +327,7 @@ class Attendance:
             "remaining_minutes": max(0, limit - weekly_minutes),
             "over_limit": weekly_minutes > limit,
             "active": active,
+            "rules": rules,
             "provisional": active is not None,
             "missing_checkout": bool(
                 active and self.clock() - moment(active["start"]) > timedelta(hours=24)

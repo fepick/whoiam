@@ -62,6 +62,18 @@ test('수동 입력에 실제 근무 안내와 24시간제 확인란을 표시�
   assert.match(summary, /09:00.*18:00/);
 });
 
+test('산정 규칙을 켜면 수동 입력은 추가 휴게만 받고 기존 야근 선택을 유지한다',()=>{
+  const {context,element}=application();
+  vm.runInContext(`data={sessions:[],today:'2026-11-06',attendance_rules:{enabled:true}};showTime();`,context);
+  let html=element('dialog-content').innerHTML;
+  assert.doesNotMatch(html,/data-default-lunch="true"/);
+  assert.match(html,/추가 휴게만/);
+  assert.match(html,/name="overtime"/);
+  vm.runInContext(`data.sessions=[{id:'fake',start:'2026-11-06T08:00:00+09:00',end:'2026-11-06T18:00:00+09:00',breaks:[],overtime:true}];showTime('fake');`,context);
+  html=element('dialog-content').innerHTML;
+  assert.match(html,/<option value="true" selected/);
+});
+
 test('겹친 기록을 안내하고 자기 자신과 맞닿은 구간은 제외한다', () => {
   const {context} = application();
   vm.runInContext(`data={sessions:[
