@@ -591,7 +591,7 @@ function helpView() {
       <ol><li><strong>실행·잠금 해제:</strong> 서버가 자동으로 연 브라우저에서 잠금을 해제합니다. 처음 사용하는 PC는 빈 저장소로 시작합니다.</li>
       <li><strong>출근:</strong> 홈의 출근 버튼 또는 명령 입력란에 ‘출근’을 입력합니다. 출근 기록과 오늘 챙길 일을 확인합니다.</li>
       <li><strong>업무 중:</strong> 업무를 추가하고 진행 상태·소요시간·수행 결과를 기록합니다. 필요할 때 휴게 시작·종료도 남깁니다.</li>
-      <li><strong>퇴근:</strong> 야근 여부를 선택하고 퇴근을 기록합니다. 생성된 일일 보고를 확인·편집한 뒤 저장하고 PNG 또는 텍스트로 공유합니다.</li></ol>
+      <li><strong>퇴근:</strong> 야근 여부를 선택하고 퇴근을 기록합니다. 일일 보고는 기록 / 보고의 ‘업무 로그로 초안 생성’ 버튼으로 생성하고 편집·저장합니다.</li></ol>
       <p>설정의 <strong>근무시간 기록 기본설정</strong>에서 회사 기준을 먼저 저장하면 합계에 반영됩니다. 데모는 가상 데이터를 메모리에만 보관하며 종료하면 사라집니다.</p>
       <button class="button button-outline" data-nav="home">홈 열기</button></section>
     <section class="card help-section" aria-labelledby="help-tasks"><h2 id="help-tasks" tabindex="-1">업무 · 리스트와 칸반</h2>
@@ -936,7 +936,7 @@ async function act(action, id) {
   }
   if (action === 'finish') {
     showDialog('퇴근 전 확인',
-      `<p>오늘 근무 ${duration(data.attendance.today_minutes)} · 주간 ${duration(data.attendance.week_minutes)}</p>${alertList()}${select('이 근무 기록의 야근 여부','finish-overtime',[['false','일반 근무'],['true','야근 · 퇴근 준비시간 인정']],String(data.attendance.active?.overtime || false))}<p>퇴근 시 실제 기록으로 일일 업무보고 초안을 생성합니다.</p>${button('confirm-finish','퇴근 기록·보고서 생성','','button-primary')}${button('close','돌아가기')}`
+      `<p>오늘 근무 ${duration(data.attendance.today_minutes)} · 주간 ${duration(data.attendance.week_minutes)}</p>${alertList()}${select('이 근무 기록의 야근 여부','finish-overtime',[['false','일반 근무'],['true','야근 · 퇴근 준비시간 인정']],String(data.attendance.active?.overtime || false))}<p>일일 보고 초안은 기록 / 보고에서 필요할 때 생성하세요.</p>${button('confirm-finish','퇴근 기록','','button-primary')}${button('close','돌아가기')}`
     );
     return;
   }
@@ -946,10 +946,7 @@ async function act(action, id) {
     if (active && Boolean(active.overtime) !== overtime) await run('attendance.overtime', {id:active.id,overtime});
     const result = await run('core.finish');
     closeDialog();
-    if (result.report) {
-      loadReport(result.report);
-      navigateTarget('report');
-    } else navigateTarget('time');
+    navigateTarget('time');
     toast(result.message);
     return;
   }

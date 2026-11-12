@@ -18,6 +18,29 @@ function application() {
   return context;
 }
 
+test('퇴근 확인은 서버 응답에 보고서가 있어도 편집 중인 보고서를 교체하지 않는다', async () => {
+  const context = application();
+  vm.runInContext(`
+    data.attendance = {active: {id:'session', overtime:false}};
+    document.querySelector = () => ({value:'false'});
+    reportDirty = true;
+    currentReport = 'edited-report';
+    closeDialog = () => {};
+    toast = () => {};
+    loadReport = () => {throw new Error('보고서 교체 금지');};
+    navigateTarget = target => {globalThis.destination = target;};
+    run = async name => {
+      globalThis.command = name;
+      return {message:'퇴근을 기록했습니다.', report:{id:'old-response'}};
+    };
+  `, context);
+  await vm.runInContext("act('confirm-finish')", context);
+  assert.equal(context.command, 'core.finish');
+  assert.equal(context.destination, 'time');
+  assert.equal(vm.runInContext('reportDirty', context), true);
+  assert.equal(vm.runInContext('currentReport', context), 'edited-report');
+});
+
 test('리스트 메모는 입력 줄마다 점 목록으로 구분하고 HTML을 이스케이프한다',()=>{
   const context=application();
   context.detail='첫 줄\r\n\n- 둘째 줄\n• 셋째 줄\n<script>fake</script>';

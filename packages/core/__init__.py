@@ -192,10 +192,9 @@ class Core:
 
     def finish(self, data: Json) -> Json:
         fields(data, {"date"})
-        report = self.reporting.generate(data.get("date", self.today()))
         return {
-            "message": "퇴근과 일일 보고 초안을 기록했습니다.",
-            "report": report,
+            "message": "퇴근을 기록했습니다.",
+            "report": None,
             "alerts": self.alerts(),
             "attendance": self.attendance.summary(
                 limit=self.settings()["weekly_limit"]
@@ -343,7 +342,7 @@ class Core:
                 return entry["result"]
         try:
             with self.store.transaction():
-                # 다른 재시도가 먼저 보고 생성을 끝낸 경우 그 결과를 사용한다.
+                # 다른 재시도가 먼저 퇴근 후 안내를 끝낸 경우 그 결과를 사용한다.
                 entry = self.commands.get(request_id)
                 if entry.get("phase") != "finished":
                     return entry["result"]
@@ -352,10 +351,10 @@ class Core:
                 return result
         except Exception:
             logger.error(
-                "Report preparation failed after durable checkout; details omitted"
+                "Checkout summary failed after durable checkout; details omitted"
             )
             return {
-                "message": "퇴근은 기록했습니다. 보고 생성에 실패했으니 기록 메뉴에서 다시 생성해주세요.",
+                "message": "퇴근은 기록했습니다. 근무 요약은 기록 메뉴에서 확인해주세요.",
                 "report": None,
                 "alerts": [],
             }

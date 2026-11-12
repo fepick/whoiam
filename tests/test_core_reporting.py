@@ -114,9 +114,13 @@ def test_start_finish_report_and_idempotency(store: EncryptedStore) -> None:
     )
     now[0] = moment("2026-10-27T18:00:00+09:00")
     finished = core.execute("core.finish", {}, str(uuid4()))
-    assert finished["report"]["daily"][0]["minutes"] == 130
-    assert finished["report"]["attendance_minutes"] == 540
-    assert finished["report"]["planned"] == []
+    assert finished["report"] is None
+    assert finished["attendance"]["today_minutes"] == 540
+    assert core.reporting.list() == []
+    report = core.execute("reporting.generate", {"date": core.today()}, str(uuid4()))
+    assert report["daily"][0]["minutes"] == 130
+    assert report["attendance_minutes"] == 540
+    assert report["planned"] == []
     assert core.snapshot()["attendance"]["active"] is None
 
 
@@ -156,7 +160,8 @@ def test_large_report_preserves_source_and_does_not_block_checkout(
     for index in range(101):
         core.tasks.save({"title": f"가상 예정 {index}"})
     core.execute("core.start", {}, str(uuid4()))
-    report = core.execute("core.finish", {}, str(uuid4()))["report"]
+    assert core.execute("core.finish", {}, str(uuid4()))["report"] is None
+    report = core.execute("reporting.generate", {"date": core.today()}, str(uuid4()))
     assert len(report["planned"]) == 100
     assert "102" in report["note"]
     assert len(report["daily"][0]["detail"]) <= 2000
@@ -164,22 +169,61 @@ def test_large_report_preserves_source_and_does_not_block_checkout(
     assert core.attendance.active() is None
 
 
-def test_checkout_survives_report_failure_and_retry(
+@pytest.mark.parametrize("command", ["core.finish", "core.command"])
+def test_checkout_preserves_edited_report_and_retry(
+    store: EncryptedStore, monkeypatch: Any, command: str
+) -> None:
+    core = Core(store)
+    report = core.reporting.save(
+        {
+            "date": core.today(),
+            "daily": [
+                {
+                    "title": "사용자 작성",
+                    "detail": "수동 편집 내용",
+                    "minutes": 15,
+                    "status": "진행 중",
+                }
+            ],
+            "planned": [],
+            "note": "사용자 공유사항",
+        }
+    )
+
+    def fail(when: str) -> Json:
+        raise AssertionError("퇴근 시 보고서를 생성하면 안 됩니다.")
+
+    monkeypatch.setattr(core.reporting, "generate", fail)
+    core.execute("core.start", {}, str(uuid4()))
+    request_id = str(uuid4())
+    data = {"text": "퇴근"} if command == "core.command" else {}
+    first = core.execute(command, data, request_id)
+    assert first["message"] == "퇴근을 기록했습니다."
+    assert first["report"] is None
+    assert core.execute(command, data, request_id) == first
+    assert core.reporting.list() == [report]
+    assert core.attendance.active() is None
+    assert len(core.attendance.list()) == 1
+
+
+def test_checkout_survives_summary_failure_and_retry(
     store: EncryptedStore, monkeypatch: Any
 ) -> None:
     core = Core(store)
     core.execute("core.start", {}, str(uuid4()))
     request_id = str(uuid4())
-    generate = core.reporting.generate
+    finish = core.finish
 
-    def fail(when: str) -> Json:
+    def fail(data: Json) -> Json:
         raise RuntimeError("synthetic failure")
 
-    monkeypatch.setattr(core.reporting, "generate", fail)
+    monkeypatch.setattr(core, "finish", fail)
     first = core.execute("core.command", {"text": "퇴근"}, request_id)
     assert first["report"] is None
     assert core.attendance.active() is None
-    monkeypatch.setattr(core.reporting, "generate", generate)
+    monkeypatch.setattr(core, "finish", finish)
     retried = core.execute("core.command", {"text": "퇴근"}, request_id)
-    assert retried["report"]["date"] == core.today()
+    assert retried["report"] is None
+    assert retried["message"] == "퇴근을 기록했습니다."
+    assert core.reporting.list() == []
     assert len(core.attendance.list()) == 1
