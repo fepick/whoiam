@@ -32,8 +32,10 @@ class Reporting:
 
     def generate(self, when: str) -> Json:
         date = day(when)
+        tasks = {task["id"]: task for task in self.tasks.list()}
         grouped: dict[str, Json] = {}
         for entry in self.tasks.daily(when):
+            task = tasks.get(entry["task_id"], {})
             row = grouped.setdefault(
                 entry["task_id"],
                 {
@@ -41,10 +43,13 @@ class Reporting:
                     "detail": "",
                     "minutes": 0,
                     "status": "진행 중",
+                    "created_date": self.created_date(task),
                 },
             )
             row["minutes"] += entry["minutes"]
             row["status"] = "완료" if entry["status"] == "done" else "진행 중"
+            row["priority"] = entry.get("priority", task.get("priority", "P2"))
+            row["progress"] = entry.get("progress", task.get("progress", 0))
             if entry["note"]:
                 row["detail"] = (row["detail"] + "\n" + entry["note"]).strip()
         planned = [
@@ -54,13 +59,14 @@ class Reporting:
                 "priority": task["priority"],
                 "estimated_minutes": task.get("estimated_minutes"),
                 "progress": task.get("progress", 0),
+                "created_date": self.created_date(task),
                 "eta": (
                     moment(task["eta"]).astimezone(SEOUL).strftime("%Y-%m-%dT%H:%M")
                     if task["eta"]
                     else ""
                 ),
             }
-            for task in self.tasks.list()
+            for task in tasks.values()
             if task["status"] not in ("done", "archived")
         ]
         previous = next(
@@ -109,7 +115,15 @@ class Reporting:
                 fields(
                     row,
                     (
-                        {"title", "detail", "minutes", "status"}
+                        {
+                            "title",
+                            "detail",
+                            "minutes",
+                            "status",
+                            "priority",
+                            "progress",
+                            "created_date",
+                        }
                         if group == "daily"
                         else {
                             "title",
@@ -118,6 +132,7 @@ class Reporting:
                             "eta",
                             "estimated_minutes",
                             "progress",
+                            "created_date",
                         }
                     ),
                 )
@@ -125,6 +140,14 @@ class Reporting:
                     "title": text(row, "title", 64),
                     "detail": text(row, "detail", 2000, False),
                 }
+                created_date = text(row, "created_date", 10, False)
+                if created_date:
+                    day(created_date)
+                result["created_date"] = created_date
+                result["priority"] = choice(
+                    {"priority": "P2", **row}, "priority", ("P1", "P2", "P3")
+                )
+                result["progress"] = integer({"progress": 0, **row}, "progress", 0, 100)
                 if group == "daily":
                     result["minutes"] = (
                         None
@@ -133,7 +156,6 @@ class Reporting:
                     )
                     result["status"] = choice(row, "status", ("완료", "진행 중"))
                 else:
-                    result["priority"] = choice(row, "priority", ("P1", "P2", "P3"))
                     eta = text(row, "eta", 16, False)
                     if eta:
                         moment(eta + ":00+09:00")
@@ -142,9 +164,6 @@ class Reporting:
                         None
                         if row.get("estimated_minutes") is None
                         else integer(row, "estimated_minutes", 0, 525600)
-                    )
-                    result["progress"] = integer(
-                        {"progress": 0, **row}, "progress", 0, 100
                     )
                 normalized[group].append(result)
         identifier = text(data, "id", 64, False) or uid()
@@ -165,6 +184,11 @@ class Reporting:
 
     def get(self, identifier: str) -> Json:
         return self.reports.get(identifier)
+
+    @staticmethod
+    def created_date(task: Json) -> str:
+        created = task.get("created_at")
+        return moment(created).astimezone(SEOUL).date().isoformat() if created else ""
 
     def list(self) -> list[Json]:
         return sorted(

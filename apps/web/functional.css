@@ -42,3 +42,5 @@ dialog{max-height:calc(100dvh / var(--ui-scale) - 32px)}
 .help-section h2{font-size:20px;margin-bottom:16px;scroll-margin-top:100px}.help-section p,.help-section ul,.help-section ol{margin:12px 0}.help-section li{margin:8px 0}.help-section ul,.help-section ol{padding-left:22px}.help-section .button{margin-top:8px}.help-section details+details{border-top:1px solid var(--line,#e5e7eb);margin-top:18px;padding-top:18px}.help-section summary{cursor:pointer;font-weight:650}.help-section pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
 @container workspace (max-width:850px){.help-layout{grid-template-columns:minmax(0,1fr)}.help-topics{position:static;flex-direction:row;flex-wrap:wrap}.help-topics h2{width:100%}}
 @media(max-width:850px){.help-layout{grid-template-columns:minmax(0,1fr)}.help-topics{position:static;flex-direction:row;flex-wrap:wrap}.help-topics h2{width:100%}}
+
+.task-new{background:#fff0bb;color:#795200;font-weight:700;white-space:nowrap;vertical-align:middle}

@@ -128,3 +128,14 @@ test('칸반은 제목·분류·우선순위·네 버튼만 표시하고 내용 
   assert.match(context.preview.content,/&lt;script&gt;fake&lt;\/script&gt;/);
   assert.doesNotMatch(context.preview.content,/<script>/);
 });
+
+test('한국 시간 등록일에만 리스트와 칸반에 new!를 표시한다',()=>{
+  const context=application();
+  vm.runInContext("data.today='2026-11-12';data.tasks[0].created_at='2026-11-11T15:00:00Z'",context);
+  for(const render of ['taskRow','kanbanCard']) {
+    assert.match(vm.runInContext(render+'(data.tasks[0])',context),/new!/);
+    assert.doesNotMatch(vm.runInContext(render+'(data.tasks[1])',context),/new!/);
+  }
+  vm.runInContext("data.today='2026-11-13'",context);
+  assert.doesNotMatch(vm.runInContext('taskRow(data.tasks[0])',context),/new!/);
+});

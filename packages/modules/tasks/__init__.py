@@ -77,6 +77,7 @@ class Tasks:
                 100,
             ),
             "status": choice(merged, "status", STATUSES),
+            "created_at": old.get("created_at", "") if old else utcnow().isoformat(),
             "updated_at": utcnow().isoformat(),
         }
         return self.tasks.put(task)
@@ -131,6 +132,8 @@ class Tasks:
                 "minutes": minutes,
                 "note": note,
                 "status": status,
+                "priority": task["priority"],
+                "progress": task.get("progress", 100 if status == "done" else 0),
             }
         )
 

@@ -8,6 +8,68 @@ from packages.platform.domain import DomainError, Json, moment
 from packages.platform.storage import EncryptedStore
 
 
+def test_new_task_report_and_historical_progress(
+    store: EncryptedStore, monkeypatch: Any
+) -> None:
+    now = [moment("2026-11-11T15:00:00Z")]
+    monkeypatch.setattr("packages.modules.tasks.utcnow", lambda: now[0])
+    core = Core(store)
+    task = core.tasks.save({"title": "가상 신규", "priority": "P1", "progress": 20})
+    for progress in (30, 60):
+        core.tasks.log(
+            {
+                "task_id": task["id"],
+                "date": "2026-11-12",
+                "minutes": 10,
+                "status": "in_progress",
+                "progress": progress,
+            }
+        )
+    now[0] = moment("2026-11-12T15:00:00Z")
+    updated = core.tasks.save({"id": task["id"], "priority": "P3", "progress": 90})
+    assert updated["created_at"] == task["created_at"]
+    report = core.reporting.generate("2026-11-12")
+    row = report["daily"][0]
+    assert (row["priority"], row["progress"], row["created_date"]) == (
+        "P1",
+        60,
+        "2026-11-12",
+    )
+    assert row["minutes"] == 20
+    assert report["planned"][0]["created_date"] == "2026-11-12"
+    edited = {key: report[key] for key in ("id", "date", "daily", "planned", "note")}
+    for key, value in (
+        ("priority", "P4"),
+        ("progress", 101),
+        ("progress", True),
+        ("created_date", "2026-02-30"),
+    ):
+        with pytest.raises(DomainError):
+            core.reporting.save({**edited, "daily": [{**row, key: value}]})
+    saved = core.reporting.save(edited)
+    assert core.reporting.get(saved["id"])["daily"] == report["daily"]
+
+
+def test_legacy_task_and_report_are_not_new(store: EncryptedStore) -> None:
+    core = Core(store)
+    task = core.tasks.save({"title": "가상 기존"})
+    task.pop("created_at")
+    core.tasks.tasks.put(task)
+    assert core.tasks.save({"id": task["id"], "title": "수정"})["created_at"] == ""
+    report = core.reporting.save(
+        {
+            "date": "2026-11-12",
+            "daily": [
+                {"title": "기존 보고", "detail": "", "status": "완료", "minutes": 10}
+            ],
+            "planned": [],
+            "note": "",
+        }
+    )
+    row = report["daily"][0]
+    assert (row["priority"], row["progress"], row["created_date"]) == ("P2", 0, "")
+
+
 def test_report_preserves_estimate_progress(store: EncryptedStore) -> None:
     core = Core(store)
     core.tasks.save(
