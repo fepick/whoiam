@@ -44,3 +44,5 @@ dialog{max-height:calc(100dvh / var(--ui-scale) - 32px)}
 @media(max-width:850px){.help-layout{grid-template-columns:minmax(0,1fr)}.help-topics{position:static;flex-direction:row;flex-wrap:wrap}.help-topics h2{width:100%}}
 
 .task-new{background:#fff0bb;color:#795200;font-weight:700;white-space:nowrap;vertical-align:middle}
+
+.workspace-footer{flex-wrap:wrap;gap:8px}#update-notice{color:#795200}#update-notice:empty{display:none}#update-notice a,#update-details a{color:var(--green);text-decoration:underline}#update-details{line-height:1.7;overflow-wrap:anywhere}

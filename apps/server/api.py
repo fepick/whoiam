@@ -17,6 +17,7 @@ from packages.platform.autostart import Autostart
 from packages.platform.backups import Backups, verify_database
 from packages.platform.domain import DomainError, Json, fields, integer, text
 from packages.platform.storage import EncryptedStore
+from packages.platform.updates import VERSION, Updates
 
 #: 저장소 탐색 대신 명시적으로 허용한 웹 자산만 제공한다.
 WEB_ROOT = Path(__file__).resolve().parents[1] / "web"
@@ -51,6 +52,8 @@ def create_app(
     app.state.core = core
     app.state.bootstrap = bootstrap
     app.state.shutdown = None
+    updates = Updates()
+    app.state.updates = updates
 
     @app.middleware("http")
     async def protect(
@@ -136,7 +139,8 @@ def create_app(
             "locked": store.locked,
             "demo": demo,
             "csrf": csrf,
-            "version": "0.05",
+            "version": VERSION,
+            "updates": updates.status(check=profile == "production" and not demo),
             "profile": profile,
             "revision": store.revision,
             "backup": {
@@ -145,6 +149,11 @@ def create_app(
                 "error": backups.error if backups else False,
             },
         }
+
+    @app.post("/api/updates/check")
+    def check_updates(body: Json) -> Json:
+        fields(body, set())
+        return updates.status(check=True, force=True)
 
     @app.post("/api/session")
     def login(body: Json) -> JSONResponse:

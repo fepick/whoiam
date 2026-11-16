@@ -220,6 +220,7 @@ async function refresh(show = true) {
     ...await api('status'),
     error: ''
   };
+  updateNotice();
   if (connection.locked) {
     data = null;
     clearPrivateView();
@@ -509,8 +510,28 @@ function attendanceRulesSettings() {
   return `<section class="card wide-card"><div class="card-heading"><h2>근무시간 기록 기본설정</h2></div><form data-form="attendance-rules"><p class="subtle-label">출퇴근 원본 시각은 보존하고 합계에서만 제외합니다. 저장하면 기존 출퇴근 기록의 일·주간 합계와 새로 생성하는 보고서의 근무시간에도 적용합니다. 이미 저장한 보고서는 자동 변경하지 않습니다.</p>${toggle('산정 규칙 사용','enabled',false)}<div class="attendance-rule-grid"><fieldset><legend>이른 출근</legend>${toggle('기준 시각 이전 제외','early_enabled')}${clock('근무 인정 시작 (24시간제)','earliest_start','08:00')}</fieldset><fieldset><legend>고정 휴게</legend>${toggle('고정 휴게 제외','lunch_enabled')}${clock('휴게 시작','lunch_start','12:00')}${clock('휴게 종료','lunch_end','13:00')}</fieldset><fieldset><legend>퇴근 준비</legend>${toggle('퇴근 준비시간 제외','preparation_enabled')}${clock('준비 시작','preparation_start','17:00')}${clock('준비 종료','preparation_end','17:30')}<p class="subtle-label">야근으로 지정한 기록에서는 이 구간을 근무시간으로 인정합니다. 직접 기록한 휴게는 계속 차감합니다.</p></fieldset></div><p class="subtle-label">고정 제외와 수동 휴게가 겹쳐도 한 번만 차감합니다. 기본은 규칙 미적용입니다.</p><div class="row-actions">${button('attendance-rules-preset','사내 기준 채우기')}<button class="button button-primary" type="submit">근무 기본설정 저장</button></div></form></section>`;
 }
 
+function updateMarkup() {
+  const update = connection.updates || {};
+  const labels = {unchecked:'아직 확인하지 않았습니다.', checking:'최신 릴리스 확인 중…', error:'최신 릴리스를 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도하세요.', no_release:'공개된 정식 릴리스가 없습니다.'};
+  let message = labels[update.status || 'unchecked'] || (update.available ? `새 버전 v${update.latest_version}이 있습니다.` : `최신 릴리스 v${update.latest_version} 기준으로 업데이트가 필요하지 않습니다.`);
+  if (update.status === 'error' && update.latest_version) message += ` 마지막 확인 버전 v${update.latest_version}`;
+  const safeURL = typeof update.release_url === 'string' && /^https:\/\/github\.com\/fepick\/whoiam\/releases\/tag\/v?\d+\.\d+(?:\.\d+)?$/.test(update.release_url);
+  return `<span role="status">${esc(message)}</span>${safeURL ? ` <a href="${esc(update.release_url)}" target="_blank" rel="noopener noreferrer">릴리스 보기</a>` : ''}`;
+}
+
+function updateNotice() {
+  const notice = document.getElementById('update-notice');
+  if (notice) notice.innerHTML = connection.updates?.available ? updateMarkup() : '';
+  const details = document.getElementById('update-details');
+  if (details) details.innerHTML = updateMarkup();
+}
+
+function updateSettings() {
+  return `<section class="card wide-card"><div class="card-heading"><h2>업데이트</h2><span>현재 v${esc(connection.version || '0.05')}</span></div><div id="update-details">${updateMarkup()}</div><p class="subtle-label">${connection.updates?.checked_at ? `마지막 성공 확인 ${esc(localTime(connection.updates.checked_at))} · ` : ''}운영 모드는 앱 접속 시와 이후 하루 간격으로 GitHub 정식 릴리스를 확인합니다.</p>${button('check-updates','업데이트 확인')}</section>`;
+}
+
 function settingsView() {
-  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${field('자동 잠금 대기 시간 (분)','idle_minutes',data.settings.idle_minutes ?? 15,'number','min="1" max="240" step="1" required')}<p class="subtle-label">1~240분 · 기본 15분 · 조회 자동 갱신은 대기 시간을 연장하지 않습니다.</p>${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div>${attendanceRulesSettings()}${vaultView()}${personalSettings()}`;
+  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${field('자동 잠금 대기 시간 (분)','idle_minutes',data.settings.idle_minutes ?? 15,'number','min="1" max="240" step="1" required')}<p class="subtle-label">1~240분 · 기본 15분 · 조회 자동 갱신은 대기 시간을 연장하지 않습니다.</p>${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div>${attendanceRulesSettings()}${vaultView()}${personalSettings()}${updateSettings()}`;
 }
 
 function personalSettings() {
@@ -525,6 +546,16 @@ function personalSettings() {
 }
 let backupRevision = 0;
 async function personalAction(action, id) {
+  if (action === 'check-updates') {
+    connection.updates = await api('updates/check', {});
+    updateNotice();
+    for (let attempt = 0; attempt < 10 && connection.updates.status === 'checking'; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 700));
+      connection.updates = (await api('status')).updates;
+      updateNotice();
+    }
+    return true;
+  }
   if (action === 'backup-now') {
     await api('backups', {});
     await refresh();
@@ -644,7 +675,7 @@ function render() {
     .page)[1];
   document.getElementById('view-toggle').innerHTML = icon(state.compact ? 'desktop' : 'phone');
   document.querySelector('.workspace-footer').innerHTML =
-    `<span><span class="tiny-dot"></span>${connection.demo?'임시 데모 · 가상 데이터만 사용하세요':connection.locked?'로컬 작업 공간 · 잠김':'로컬 암호화 저장 · 외부 전송 없음'}</span><span>whoiam(후임) · v0.05</span>`;
+    `<span><span class="tiny-dot"></span>${connection.demo?'임시 데모 · 가상 데이터만 사용하세요':connection.locked?'로컬 작업 공간 · 잠김':'로컬 암호화 저장'}</span><span id="update-notice">${connection.updates?.available ? updateMarkup() : ''}</span><span>whoiam(후임) · v${esc(connection.version || '0.05')}</span>`;
   document.querySelector('.device-status').innerHTML =
     `<span class="node-dot"></span>${esc({production:'운영',development:'개발',test:'테스트',demo:'임시 데모'}[connection.profile] || (connection.demo?'임시 데모':'로컬 장치'))}`;
   const main = document.getElementById('main-content');
@@ -1481,6 +1512,7 @@ async function poll() {
         ...connection,
         ...status
       };
+      updateNotice();
       if (status.locked) {
         data = null;
         clearPrivateView();

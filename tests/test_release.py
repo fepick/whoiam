@@ -22,6 +22,7 @@ def fixture_repo(root: Path) -> None:
     git(root, "config", "user.email", "package@example.invalid")
     for name in (
         "apps/server/__main__.py",
+        "VERSION",
         "requirements.txt",
         "scripts/Setup-Whoiam.ps1",
         "docs/setup.md",
@@ -77,6 +78,7 @@ def test_release_uses_allowlist_and_manifest_without_history(tmp_path: Path) -> 
             b"synthetic excluded fixture" in archive.read(name) for name in names
         )
         manifest = json.loads(archive.read("whoiam-0.05/MANIFEST.json"))
+        assert "VERSION" in manifest["files"]
         assert manifest["source_commit"] == result["source_commit"]
         for name, digest in manifest["files"].items():
             assert (

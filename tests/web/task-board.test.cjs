@@ -18,6 +18,17 @@ function application() {
   return context;
 }
 
+test('업데이트 안내는 신규 버전을 표시하고 공식 릴리스 링크만 허용한다', () => {
+  const context = application();
+  vm.runInContext("connection.updates={status:'ok',available:true,latest_version:'0.06',release_url:'https://github.com/fepick/whoiam/releases/tag/v0.06'}", context);
+  assert.match(vm.runInContext('updateMarkup()', context), /새 버전 v0.06/);
+  assert.match(vm.runInContext('updateMarkup()', context), /rel="noopener noreferrer"/);
+  vm.runInContext("connection.updates.release_url='javascript:alert(1)';connection.updates.latest_version='<script>'", context);
+  assert.doesNotMatch(vm.runInContext('updateMarkup()', context), /href=|<script>/);
+  vm.runInContext("connection.updates={status:'error',latest_version:'0.06'}", context);
+  assert.match(vm.runInContext('updateMarkup()', context), /확인하지 못했습니다/);
+});
+
 test('퇴근 확인은 서버 응답에 보고서가 있어도 편집 중인 보고서를 교체하지 않는다', async () => {
   const context = application();
   vm.runInContext(`
