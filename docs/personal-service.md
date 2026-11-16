@@ -86,6 +86,10 @@ Scrypt와 Fernet으로 OS 키 사본을 암호화하며 평문 키는 파일로 
 
 ## 로그인 자동 실행과 종료
 
+### 기존 실행·등록 스크립트 사용
+
+먼저 [설치 안내](setup.md)에 따라 프로젝트의 `.venv`와 `requirements.txt` 의존성을 준비합니다. 아래 명령은 프로젝트 루트에서 현재 Windows 사용자로 실행합니다.
+
 앱의 설정 → 로그인 자동 실행에서 켜거나 끌 수 있습니다. 초기값은 등록되지 않은 상태입니다.
 현재 사용자 로그인 시 일반 권한으로 실행하며 Windows 암호·관리자 권한을 저장하지 않습니다.
 도우미 콘솔은 숨기고 브라우저를 엽니다. 실제 키 저장소는 사용자가 잠금을 해제할 때 엽니다.
@@ -94,12 +98,55 @@ Scrypt와 Fernet으로 OS 키 사본을 암호화하며 평문 키는 파일로 
 ```powershell
 .\scripts\Install-Autostart.ps1 -Preview
 .\scripts\Install-Autostart.ps1
+.\scripts\Install-Autostart.ps1 -Status
 .\scripts\Install-Autostart.ps1 -Remove
 ```
+
+`-Preview`는 실행 정의를 점검하고, 옵션 없는 호출은 Windows 작업 스케줄러에 로그인 작업을 등록합니다. `-Status`는 등록 여부를 JSON으로 보여주고, `-Remove`는 자동 실행 등록을 해제합니다. 등록 직후 즉시 서버를 시작하려면 다음을 실행합니다.
+
+```powershell
+.\scripts\Start-Whoiam.ps1
+```
+
+자동 실행은 Windows 사용자 로그인을 기준으로 동작합니다. 서버가 열어준 브라우저에서 사용자가 잠금을 해제하고, 종료할 때는 설정 → 개인 실사용 관리 → 앱 종료를 누릅니다.
+
+### 더블클릭 실행 파일 만들기
+
+메모장에 아래 내용을 붙여 넣고 프로젝트 루트에 `Whoiam-Start.cmd`로 저장합니다. 파일 형식을 ‘모든 파일’로 선택해 `.cmd.txt`가 되지 않도록 합니다. 파일의 바로가기를 바탕화면에 만들면 사용할 때 더블클릭으로 서버와 브라우저를 열 수 있습니다.
+
+```bat
+@echo off
+setlocal
+cd /d "%~dp0"
+if not exist ".venv\Scripts\python.exe" (
+    echo Prepare .venv and install requirements.txt first.
+    pause
+    exit /b 1
+)
+".venv\Scripts\python.exe" -m apps.server --profile=production --port=4173
+if errorlevel 1 pause
+```
+
+`%~dp0`는 이 실행 파일이 있는 폴더입니다. 실제 작업 폴더에 맞춰 매번 경로를 고칠 필요가 없도록 프로젝트 루트에 둡니다. 이 방식은 실행 중 콘솔 창을 유지합니다. 로그인 시 콘솔을 숨겨 실행하려면 위 `Install-Autostart.ps1` 등록 방식을 사용합니다.
+
+### 포트·데이터 홈과 재등록
+
+기존 서버를 사용자 지정 포트나 데이터 홈으로 운영한다면 수동 실행과 자동 실행 등록에 같은 값을 지정합니다. `DataHome`에는 `.private`를 포함한 프로필 폴더가 아니라 운영 데이터 홈의 절대 경로를 넣습니다.
+
+```powershell
+.\scripts\Start-Whoiam.ps1 -Profile production -Port 4175 -DataHome 'C:\WhoiamData'
+.\scripts\Install-Autostart.ps1 -Profile production -Port 4175 -DataHome 'C:\WhoiamData' -Preview
+.\scripts\Install-Autostart.ps1 -Profile production -Port 4175 -DataHome 'C:\WhoiamData'
+```
+
+위 경로는 예시입니다. 기존 설치의 운영 홈을 계속 사용하려면 실제 사용 중인 값을 유지합니다. 기본 설치는 `DataHome`을 생략해 `%LOCALAPPDATA%/Whoiam`을 사용합니다. 같은 사용자·프로필의 등록을 다시 실행하면 해당 자동 실행 작업을 갱신합니다.
+
+실행 정책이 스크립트를 차단하면 실패 메시지와 사내 정책을 확인합니다. 허용된 환경에서 등록 스크립트를 사용하고, 수동 실행은 위 `.cmd` 예시나 `python -m apps.server` 명령을 사용할 수 있습니다.
 
 개발자가 수행한 검증은 Preview와 가짜 작업 등록 어댑터이며 PC에 실제 작업은 등록하지 않았습니다.
 사내 정책이 작업 등록을 제한하면 실패를 안내하며 정책·실행 정책을 우회하지 않습니다.
 자동 실행은 현재 checkout과 `.venv`를 사용하므로 코드 경로를 옮긴 뒤에는 다시 등록해야 합니다.
+새 버전 ZIP을 다른 폴더에 설치했다면 이전 서버를 정상 종료한 뒤 새 폴더에서 설치를 완료하고 자동 실행을 다시 등록합니다. 같은 폴더의 Git 업데이트라면 서버를 재실행해 새 코드를 반영합니다.
 
 ## 검증과 남은 범위
 
