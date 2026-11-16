@@ -63,6 +63,9 @@ test('리스트 메모는 입력 줄마다 점 목록으로 구분하고 HTML을
 
 test('분류 필터는 두 보기와 기록 합계에 적용된다', () => {
   const context = application();
+  assert.equal(vm.runInContext('state.taskMode', context), 'kanban');
+  const initial = vm.runInContext('tasksView()', context);
+  assert.ok(initial.indexOf('data-task-mode="kanban"') < initial.indexOf('data-task-mode="list"'));
   vm.runInContext("state.taskCategory='category:HW'; state.taskMode='kanban';", context);
   let html = vm.runInContext('tasksView()', context);
   assert.match(html, /data-task-card="a"/);
@@ -79,6 +82,7 @@ test('분류 필터는 두 보기와 기록 합계에 적용된다', () => {
 
 test('우선순위·예정일·분류·상태를 함께 적용하고 관련 시간 기록만 합산한다',()=>{
   const context=application();
+  vm.runInContext("state.taskMode='list'",context);
   vm.runInContext(`data.today='2026-11-06';data.tasks[0].due='2026-11-06';data.tasks[1].due='2026-11-07';
     state.taskPriority='P1';state.taskDate='today';state.taskCategory='category:HW';`,context);
   let html=vm.runInContext('tasksView()',context);

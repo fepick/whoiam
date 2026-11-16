@@ -43,7 +43,7 @@ const state = {
   materialTab: 'purchases',
   recordTab: 'time',
   taskTab: 'all',
-  taskMode: 'list',
+  taskMode: 'kanban',
   taskCategory: '',
   taskPriority: '',
   taskDate: '',
@@ -339,7 +339,7 @@ function tasksView() {
   const logs = data.logs.filter(log => matchesTaskFilters(data.tasks.find(task => task.id === log.task_id)));
   return `${header('TASKS & PLANS','업무와 소요시간','상태를 옮겨 진행을 정리하고, 실제 소요시간을 기록하세요.')}
     <div class="toolbar task-toolbar"><div class="tabs" aria-label="업무 상태 필터">${[['all','전체'],['todo','진행'],['done','완료'],['archived','보관']].map(([id,label])=>`<button data-task-tab="${id}" class="${state.taskTab===id?'active':''}" aria-pressed="${state.taskTab===id}">${label}</button>`).join('')}</div>${button('new-task','＋ 업무 추가','','button-primary')}</div>
-    <div class="toolbar task-controls">${select('분류','task-category',[['','모든 분류'],...categories.map(category=>[`category:${category}`,category||'미분류'])],state.taskCategory)}${taskFilterControls()}<div class="tabs view-tabs" aria-label="업무 보기 모드">${[['list','리스트'],['kanban','칸반']].map(([mode,title])=>`<button data-task-mode="${mode}" class="${state.taskMode===mode?'active':''}" aria-pressed="${state.taskMode===mode}">${title}</button>`).join('')}</div><span class="subtle-label">${tasks.length}개 업무</span></div>
+    <div class="toolbar task-controls">${select('분류','task-category',[['','모든 분류'],...categories.map(category=>[`category:${category}`,category||'미분류'])],state.taskCategory)}${taskFilterControls()}<div class="tabs view-tabs" aria-label="업무 보기 모드">${[['kanban','칸반'],['list','리스트']].map(([mode,title])=>`<button data-task-mode="${mode}" class="${state.taskMode===mode?'active':''}" aria-pressed="${state.taskMode===mode}">${title}</button>`).join('')}</div><span class="subtle-label">${tasks.length}개 업무</span></div>
     ${state.taskMode==='kanban'?kanbanBoard(tasks):`<section class="card wide-card">${tasks.length?tasks.map(taskRow).join(''):empty('조건에 맞는 업무가 없습니다.')}</section>`}
     <section class="card wide-card"><div class="card-heading"><h2>오늘 입력한 업무 기록${state.taskCategory||state.taskPriority||state.taskDate?' · 선택한 조건':''}</h2><span>${duration(logs.reduce((sum,row)=>sum+row.minutes,0))}</span></div>${logs.length?logs.map(log=>`<div class="timeline-item"><span>${log.minutes}분</span><div><strong>${esc(log.title)}</strong><small>${esc(log.note)}</small></div>${button('edit-log','정정',log.id)}</div>`).join(''):empty('조건에 맞는 시간 기록이 없습니다.')}</section>${commandBox()}`;
 }
