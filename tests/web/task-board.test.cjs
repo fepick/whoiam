@@ -18,6 +18,40 @@ function application() {
   return context;
 }
 
+test('업데이트 안내는 신규 버전을 표시하고 공식 릴리스 링크만 허용한다', () => {
+  const context = application();
+  vm.runInContext("connection.updates={status:'ok',available:true,latest_version:'0.06',release_url:'https://github.com/fepick/whoiam/releases/tag/v0.06'}", context);
+  assert.match(vm.runInContext('updateMarkup()', context), /새 버전 v0.06/);
+  assert.match(vm.runInContext('updateMarkup()', context), /rel="noopener noreferrer"/);
+  vm.runInContext("connection.updates.release_url='javascript:alert(1)';connection.updates.latest_version='<script>'", context);
+  assert.doesNotMatch(vm.runInContext('updateMarkup()', context), /href=|<script>/);
+  vm.runInContext("connection.updates={status:'error',latest_version:'0.06'}", context);
+  assert.match(vm.runInContext('updateMarkup()', context), /확인하지 못했습니다/);
+});
+
+test('퇴근 확인은 서버 응답에 보고서가 있어도 편집 중인 보고서를 교체하지 않는다', async () => {
+  const context = application();
+  vm.runInContext(`
+    data.attendance = {active: {id:'session', overtime:false}};
+    document.querySelector = () => ({value:'false'});
+    reportDirty = true;
+    currentReport = 'edited-report';
+    closeDialog = () => {};
+    toast = () => {};
+    loadReport = () => {throw new Error('보고서 교체 금지');};
+    navigateTarget = target => {globalThis.destination = target;};
+    run = async name => {
+      globalThis.command = name;
+      return {message:'퇴근을 기록했습니다.', report:{id:'old-response'}};
+    };
+  `, context);
+  await vm.runInContext("act('confirm-finish')", context);
+  assert.equal(context.command, 'core.finish');
+  assert.equal(context.destination, 'time');
+  assert.equal(vm.runInContext('reportDirty', context), true);
+  assert.equal(vm.runInContext('currentReport', context), 'edited-report');
+});
+
 test('리스트 메모는 입력 줄마다 점 목록으로 구분하고 HTML을 이스케이프한다',()=>{
   const context=application();
   context.detail='첫 줄\r\n\n- 둘째 줄\n• 셋째 줄\n<script>fake</script>';
@@ -29,6 +63,9 @@ test('리스트 메모는 입력 줄마다 점 목록으로 구분하고 HTML을
 
 test('분류 필터는 두 보기와 기록 합계에 적용된다', () => {
   const context = application();
+  assert.equal(vm.runInContext('state.taskMode', context), 'kanban');
+  const initial = vm.runInContext('tasksView()', context);
+  assert.ok(initial.indexOf('data-task-mode="kanban"') < initial.indexOf('data-task-mode="list"'));
   vm.runInContext("state.taskCategory='category:HW'; state.taskMode='kanban';", context);
   let html = vm.runInContext('tasksView()', context);
   assert.match(html, /data-task-card="a"/);
@@ -45,6 +82,7 @@ test('분류 필터는 두 보기와 기록 합계에 적용된다', () => {
 
 test('우선순위·예정일·분류·상태를 함께 적용하고 관련 시간 기록만 합산한다',()=>{
   const context=application();
+  vm.runInContext("state.taskMode='list'",context);
   vm.runInContext(`data.today='2026-11-06';data.tasks[0].due='2026-11-06';data.tasks[1].due='2026-11-07';
     state.taskPriority='P1';state.taskDate='today';state.taskCategory='category:HW';`,context);
   let html=vm.runInContext('tasksView()',context);
@@ -127,4 +165,15 @@ test('칸반은 제목·분류·우선순위·네 버튼만 표시하고 내용 
   assert.match(context.preview.content,/0시간 30분/);
   assert.match(context.preview.content,/&lt;script&gt;fake&lt;\/script&gt;/);
   assert.doesNotMatch(context.preview.content,/<script>/);
+});
+
+test('한국 시간 등록일에만 리스트와 칸반에 new!를 표시한다',()=>{
+  const context=application();
+  vm.runInContext("data.today='2026-11-12';data.tasks[0].created_at='2026-11-11T15:00:00Z'",context);
+  for(const render of ['taskRow','kanbanCard']) {
+    assert.match(vm.runInContext(render+'(data.tasks[0])',context),/new!/);
+    assert.doesNotMatch(vm.runInContext(render+'(data.tasks[1])',context),/new!/);
+  }
+  vm.runInContext("data.today='2026-11-13'",context);
+  assert.doesNotMatch(vm.runInContext('taskRow(data.tasks[0])',context),/new!/);
 });

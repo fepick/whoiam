@@ -61,3 +61,13 @@ POST는 같은 Origin, 세션 쿠키, `X-Whoiam-CSRF`, JSON, 요청 크기 상�
 `attendance.record`는 겹친 기존 세션 전체를 이력으로 보관하고 수동 입력을 우선 적용합니다.
 현재 기록의 응답에는 `source`와 `replaces`가 포함되며 `snapshot.attendance_history`에서 제외된 원본과 정정 전 이력을 조회합니다.
 이력의 값을 다시 적용하려면 `id`를 빼고 새 `attendance.record` 명령으로 저장합니다.
+
+## 업데이트 알림
+
+`GET /api/status`는 로컬 `VERSION`과 `updates` 상태를 반환합니다. 운영 프로필은 첫 상태 조회 시 비동기로 GitHub 최신 정식 릴리스를 확인하며 성공 후 24시간, 실패 후 1시간 간격으로 다시 확인합니다. 데모·개발·테스트는 자동 외부 조회를 수행하지 않습니다.
+
+`POST /api/updates/check`의 본문은 `{}`이며 기존 로컬 세션·Origin·CSRF 검사를 적용합니다. 수동 확인은 60초 간격으로 제한하고 진행 중인 확인은 공유합니다. `updates.status`는 `unchecked`, `checking`, `ok`, `error`, `no_release` 중 하나입니다. `current_version`, `latest_version`, `available`, `release_url`, `checked_at`(마지막 성공 시각)을 제공합니다. 실패 시 마지막 성공 결과를 유지하고 실패 상태를 함께 반환합니다.
+
+조회 대상은 공개 `fepick/whoiam` 저장소의 최신 릴리스입니다. 요청에 업무 데이터·OS 자격증명·GitHub 토큰을 포함하지 않습니다. 공개 API 요청에 따른 접속 IP 등 네트워크 메타데이터는 GitHub에 전달됩니다. API 기준은 [GitHub 공식 릴리스 문서](https://docs.github.com/en/rest/releases/releases#get-the-latest-release)를 따릅니다.
+
+버전은 `v0.05`, `0.05.1` 같은 2~3자리 숫자 구성요소로 비교하며 생략된 패치는 0입니다. 동일 버전 태그를 교체해도 업데이트로 알리지 않으므로 신규 배포는 버전을 올립니다. 알림은 하단과 설정 → 업데이트에 표시하며 공식 릴리스 링크로 연결합니다. 로컬 `VERSION`은 서버 버전과 배포 ZIP 버전의 공통 기준이며 패키지에 포함됩니다.

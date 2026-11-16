@@ -11,9 +11,14 @@ from pathlib import Path, PurePosixPath
 import fire
 
 #: 기본 패키지 버전. 실행 화면과 함께 갱신한다.
-VERSION = "0.05"
+VERSION = (
+    (Path(__file__).resolve().parents[1] / "VERSION")
+    .read_text(encoding="utf-8")
+    .strip()
+)
 #: 실행에 필요한 루트 파일의 명시적 허용 목록.
 ROOT_FILES = {
+    "VERSION",
     "README.md",
     "requirements.txt",
     "requirements-dev.txt",

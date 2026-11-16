@@ -8,6 +8,68 @@ from packages.platform.domain import DomainError, Json, moment
 from packages.platform.storage import EncryptedStore
 
 
+def test_new_task_report_and_historical_progress(
+    store: EncryptedStore, monkeypatch: Any
+) -> None:
+    now = [moment("2026-11-11T15:00:00Z")]
+    monkeypatch.setattr("packages.modules.tasks.utcnow", lambda: now[0])
+    core = Core(store)
+    task = core.tasks.save({"title": "가상 신규", "priority": "P1", "progress": 20})
+    for progress in (30, 60):
+        core.tasks.log(
+            {
+                "task_id": task["id"],
+                "date": "2026-11-12",
+                "minutes": 10,
+                "status": "in_progress",
+                "progress": progress,
+            }
+        )
+    now[0] = moment("2026-11-12T15:00:00Z")
+    updated = core.tasks.save({"id": task["id"], "priority": "P3", "progress": 90})
+    assert updated["created_at"] == task["created_at"]
+    report = core.reporting.generate("2026-11-12")
+    row = report["daily"][0]
+    assert (row["priority"], row["progress"], row["created_date"]) == (
+        "P1",
+        60,
+        "2026-11-12",
+    )
+    assert row["minutes"] == 20
+    assert report["planned"][0]["created_date"] == "2026-11-12"
+    edited = {key: report[key] for key in ("id", "date", "daily", "planned", "note")}
+    for key, value in (
+        ("priority", "P4"),
+        ("progress", 101),
+        ("progress", True),
+        ("created_date", "2026-02-30"),
+    ):
+        with pytest.raises(DomainError):
+            core.reporting.save({**edited, "daily": [{**row, key: value}]})
+    saved = core.reporting.save(edited)
+    assert core.reporting.get(saved["id"])["daily"] == report["daily"]
+
+
+def test_legacy_task_and_report_are_not_new(store: EncryptedStore) -> None:
+    core = Core(store)
+    task = core.tasks.save({"title": "가상 기존"})
+    task.pop("created_at")
+    core.tasks.tasks.put(task)
+    assert core.tasks.save({"id": task["id"], "title": "수정"})["created_at"] == ""
+    report = core.reporting.save(
+        {
+            "date": "2026-11-12",
+            "daily": [
+                {"title": "기존 보고", "detail": "", "status": "완료", "minutes": 10}
+            ],
+            "planned": [],
+            "note": "",
+        }
+    )
+    row = report["daily"][0]
+    assert (row["priority"], row["progress"], row["created_date"]) == ("P2", 0, "")
+
+
 def test_report_preserves_estimate_progress(store: EncryptedStore) -> None:
     core = Core(store)
     core.tasks.save(
@@ -52,9 +114,13 @@ def test_start_finish_report_and_idempotency(store: EncryptedStore) -> None:
     )
     now[0] = moment("2026-10-27T18:00:00+09:00")
     finished = core.execute("core.finish", {}, str(uuid4()))
-    assert finished["report"]["daily"][0]["minutes"] == 130
-    assert finished["report"]["attendance_minutes"] == 540
-    assert finished["report"]["planned"] == []
+    assert finished["report"] is None
+    assert finished["attendance"]["today_minutes"] == 540
+    assert core.reporting.list() == []
+    report = core.execute("reporting.generate", {"date": core.today()}, str(uuid4()))
+    assert report["daily"][0]["minutes"] == 130
+    assert report["attendance_minutes"] == 540
+    assert report["planned"] == []
     assert core.snapshot()["attendance"]["active"] is None
 
 
@@ -94,7 +160,8 @@ def test_large_report_preserves_source_and_does_not_block_checkout(
     for index in range(101):
         core.tasks.save({"title": f"가상 예정 {index}"})
     core.execute("core.start", {}, str(uuid4()))
-    report = core.execute("core.finish", {}, str(uuid4()))["report"]
+    assert core.execute("core.finish", {}, str(uuid4()))["report"] is None
+    report = core.execute("reporting.generate", {"date": core.today()}, str(uuid4()))
     assert len(report["planned"]) == 100
     assert "102" in report["note"]
     assert len(report["daily"][0]["detail"]) <= 2000
@@ -102,22 +169,61 @@ def test_large_report_preserves_source_and_does_not_block_checkout(
     assert core.attendance.active() is None
 
 
-def test_checkout_survives_report_failure_and_retry(
+@pytest.mark.parametrize("command", ["core.finish", "core.command"])
+def test_checkout_preserves_edited_report_and_retry(
+    store: EncryptedStore, monkeypatch: Any, command: str
+) -> None:
+    core = Core(store)
+    report = core.reporting.save(
+        {
+            "date": core.today(),
+            "daily": [
+                {
+                    "title": "사용자 작성",
+                    "detail": "수동 편집 내용",
+                    "minutes": 15,
+                    "status": "진행 중",
+                }
+            ],
+            "planned": [],
+            "note": "사용자 공유사항",
+        }
+    )
+
+    def fail(when: str) -> Json:
+        raise AssertionError("퇴근 시 보고서를 생성하면 안 됩니다.")
+
+    monkeypatch.setattr(core.reporting, "generate", fail)
+    core.execute("core.start", {}, str(uuid4()))
+    request_id = str(uuid4())
+    data = {"text": "퇴근"} if command == "core.command" else {}
+    first = core.execute(command, data, request_id)
+    assert first["message"] == "퇴근을 기록했습니다."
+    assert first["report"] is None
+    assert core.execute(command, data, request_id) == first
+    assert core.reporting.list() == [report]
+    assert core.attendance.active() is None
+    assert len(core.attendance.list()) == 1
+
+
+def test_checkout_survives_summary_failure_and_retry(
     store: EncryptedStore, monkeypatch: Any
 ) -> None:
     core = Core(store)
     core.execute("core.start", {}, str(uuid4()))
     request_id = str(uuid4())
-    generate = core.reporting.generate
+    finish = core.finish
 
-    def fail(when: str) -> Json:
+    def fail(data: Json) -> Json:
         raise RuntimeError("synthetic failure")
 
-    monkeypatch.setattr(core.reporting, "generate", fail)
+    monkeypatch.setattr(core, "finish", fail)
     first = core.execute("core.command", {"text": "퇴근"}, request_id)
     assert first["report"] is None
     assert core.attendance.active() is None
-    monkeypatch.setattr(core.reporting, "generate", generate)
+    monkeypatch.setattr(core, "finish", finish)
     retried = core.execute("core.command", {"text": "퇴근"}, request_id)
-    assert retried["report"]["date"] == core.today()
+    assert retried["report"] is None
+    assert retried["message"] == "퇴근을 기록했습니다."
+    assert core.reporting.list() == []
     assert len(core.attendance.list()) == 1

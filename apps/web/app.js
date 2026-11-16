@@ -43,7 +43,7 @@ const state = {
   materialTab: 'purchases',
   recordTab: 'time',
   taskTab: 'all',
-  taskMode: 'list',
+  taskMode: 'kanban',
   taskCategory: '',
   taskPriority: '',
   taskDate: '',
@@ -220,6 +220,7 @@ async function refresh(show = true) {
     ...await api('status'),
     error: ''
   };
+  updateNotice();
   if (connection.locked) {
     data = null;
     clearPrivateView();
@@ -300,8 +301,13 @@ function taskDetailLines(value) {
   return lines.length ? `<ul class="task-detail-lines">${lines.map(line => `<li>${esc(line.replace(/^[-•]\s+/, ''))}</li>`).join('')}</ul>` : '';
 }
 
+function taskNewBadge(task) {
+  return task.created_at && localInput(task.created_at).slice(0, 10) === data.today
+    ? '<span class="tag task-new" aria-label="오늘 등록한 업무">new!</span>' : '';
+}
+
 function taskRow(task) {
-  return `<div class="task-row ${task.status==='done'?'done':''}"><button class="task-check" data-action="toggle-task" data-id="${esc(task.id)}" aria-label="${esc(task.title)} 완료 전환" aria-pressed="${task.status==='done'}">${task.status==='done'?icon('check'):''}</button><div class="task-content"><div class="task-title">${esc(task.title)}</div><div class="task-detail">${taskDetailLines(task.detail)}</div><div class="task-meta"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category)}</span><span>${esc(task.due||'예정일 미정')}</span><span>예상 ${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</span><span>진행도 ${esc(task.progress ?? (task.status==='done'?100:0))}%</span></div></div><div class="row-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></div>`;
+  return `<div class="task-row ${task.status==='done'?'done':''}"><button class="task-check" data-action="toggle-task" data-id="${esc(task.id)}" aria-label="${esc(task.title)} 완료 전환" aria-pressed="${task.status==='done'}">${task.status==='done'?icon('check'):''}</button><div class="task-content"><div class="task-title">${esc(task.title)} ${taskNewBadge(task)}</div><div class="task-detail">${taskDetailLines(task.detail)}</div><div class="task-meta"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category)}</span><span>${esc(task.due||'예정일 미정')}</span><span>예상 ${task.estimated_minutes == null ? '미입력' : `${esc(task.estimated_minutes)}분`}</span><span>진행도 ${esc(task.progress ?? (task.status==='done'?100:0))}%</span></div></div><div class="row-actions">${button('log-task','시간 기록',task.id)}${button('edit-task','수정',task.id)}</div></div>`;
 }
 
 function weeklyCard() {
@@ -333,7 +339,7 @@ function tasksView() {
   const logs = data.logs.filter(log => matchesTaskFilters(data.tasks.find(task => task.id === log.task_id)));
   return `${header('TASKS & PLANS','업무와 소요시간','상태를 옮겨 진행을 정리하고, 실제 소요시간을 기록하세요.')}
     <div class="toolbar task-toolbar"><div class="tabs" aria-label="업무 상태 필터">${[['all','전체'],['todo','진행'],['done','완료'],['archived','보관']].map(([id,label])=>`<button data-task-tab="${id}" class="${state.taskTab===id?'active':''}" aria-pressed="${state.taskTab===id}">${label}</button>`).join('')}</div>${button('new-task','＋ 업무 추가','','button-primary')}</div>
-    <div class="toolbar task-controls">${select('분류','task-category',[['','모든 분류'],...categories.map(category=>[`category:${category}`,category||'미분류'])],state.taskCategory)}${taskFilterControls()}<div class="tabs view-tabs" aria-label="업무 보기 모드">${[['list','리스트'],['kanban','칸반']].map(([mode,title])=>`<button data-task-mode="${mode}" class="${state.taskMode===mode?'active':''}" aria-pressed="${state.taskMode===mode}">${title}</button>`).join('')}</div><span class="subtle-label">${tasks.length}개 업무</span></div>
+    <div class="toolbar task-controls">${select('분류','task-category',[['','모든 분류'],...categories.map(category=>[`category:${category}`,category||'미분류'])],state.taskCategory)}${taskFilterControls()}<div class="tabs view-tabs" aria-label="업무 보기 모드">${[['kanban','칸반'],['list','리스트']].map(([mode,title])=>`<button data-task-mode="${mode}" class="${state.taskMode===mode?'active':''}" aria-pressed="${state.taskMode===mode}">${title}</button>`).join('')}</div><span class="subtle-label">${tasks.length}개 업무</span></div>
     ${state.taskMode==='kanban'?kanbanBoard(tasks):`<section class="card wide-card">${tasks.length?tasks.map(taskRow).join(''):empty('조건에 맞는 업무가 없습니다.')}</section>`}
     <section class="card wide-card"><div class="card-heading"><h2>오늘 입력한 업무 기록${state.taskCategory||state.taskPriority||state.taskDate?' · 선택한 조건':''}</h2><span>${duration(logs.reduce((sum,row)=>sum+row.minutes,0))}</span></div>${logs.length?logs.map(log=>`<div class="timeline-item"><span>${log.minutes}분</span><div><strong>${esc(log.title)}</strong><small>${esc(log.note)}</small></div>${button('edit-log','정정',log.id)}</div>`).join(''):empty('조건에 맞는 시간 기록이 없습니다.')}</section>${commandBox()}`;
 }
@@ -368,7 +374,7 @@ function taskFilterControls() {
 function kanbanCard(task) {
   return `<article class="kanban-card" data-priority="${esc(task.priority)}" draggable="true" data-task-card="${esc(task.id)}" aria-label="${esc(task.title)}">
     <div class="kanban-card-top"><span class="tag priority-tag" data-priority="${esc(task.priority)}">${esc(task.priority)}</span><span>${esc(task.category || '미분류')}</span></div>
-    <h3>${esc(task.title)}</h3>
+    <h3>${esc(task.title)} ${taskNewBadge(task)}</h3>
     <div class="kanban-actions">${task.status!=='archived'?button('archive-task','보관',task.id):''}${button('log-task','기록',task.id)}${button('edit-task','수정',task.id)}${button('task-detail','내용',task.id)}</div></article>`;
 }
 
@@ -504,8 +510,28 @@ function attendanceRulesSettings() {
   return `<section class="card wide-card"><div class="card-heading"><h2>근무시간 기록 기본설정</h2></div><form data-form="attendance-rules"><p class="subtle-label">출퇴근 원본 시각은 보존하고 합계에서만 제외합니다. 저장하면 기존 출퇴근 기록의 일·주간 합계와 새로 생성하는 보고서의 근무시간에도 적용합니다. 이미 저장한 보고서는 자동 변경하지 않습니다.</p>${toggle('산정 규칙 사용','enabled',false)}<div class="attendance-rule-grid"><fieldset><legend>이른 출근</legend>${toggle('기준 시각 이전 제외','early_enabled')}${clock('근무 인정 시작 (24시간제)','earliest_start','08:00')}</fieldset><fieldset><legend>고정 휴게</legend>${toggle('고정 휴게 제외','lunch_enabled')}${clock('휴게 시작','lunch_start','12:00')}${clock('휴게 종료','lunch_end','13:00')}</fieldset><fieldset><legend>퇴근 준비</legend>${toggle('퇴근 준비시간 제외','preparation_enabled')}${clock('준비 시작','preparation_start','17:00')}${clock('준비 종료','preparation_end','17:30')}<p class="subtle-label">야근으로 지정한 기록에서는 이 구간을 근무시간으로 인정합니다. 직접 기록한 휴게는 계속 차감합니다.</p></fieldset></div><p class="subtle-label">고정 제외와 수동 휴게가 겹쳐도 한 번만 차감합니다. 기본은 규칙 미적용입니다.</p><div class="row-actions">${button('attendance-rules-preset','사내 기준 채우기')}<button class="button button-primary" type="submit">근무 기본설정 저장</button></div></form></section>`;
 }
 
+function updateMarkup() {
+  const update = connection.updates || {};
+  const labels = {unchecked:'아직 확인하지 않았습니다.', checking:'최신 릴리스 확인 중…', error:'최신 릴리스를 확인하지 못했습니다. 연결 상태를 확인하고 다시 시도하세요.', no_release:'공개된 정식 릴리스가 없습니다.'};
+  let message = labels[update.status || 'unchecked'] || (update.available ? `새 버전 v${update.latest_version}이 있습니다.` : `최신 릴리스 v${update.latest_version} 기준으로 업데이트가 필요하지 않습니다.`);
+  if (update.status === 'error' && update.latest_version) message += ` 마지막 확인 버전 v${update.latest_version}`;
+  const safeURL = typeof update.release_url === 'string' && /^https:\/\/github\.com\/fepick\/whoiam\/releases\/tag\/v?\d+\.\d+(?:\.\d+)?$/.test(update.release_url);
+  return `<span role="status">${esc(message)}</span>${safeURL ? ` <a href="${esc(update.release_url)}" target="_blank" rel="noopener noreferrer">릴리스 보기</a>` : ''}`;
+}
+
+function updateNotice() {
+  const notice = document.getElementById('update-notice');
+  if (notice) notice.innerHTML = connection.updates?.available ? updateMarkup() : '';
+  const details = document.getElementById('update-details');
+  if (details) details.innerHTML = updateMarkup();
+}
+
+function updateSettings() {
+  return `<section class="card wide-card"><div class="card-heading"><h2>업데이트</h2><span>현재 v${esc(connection.version || '0.05.1')}</span></div><div id="update-details">${updateMarkup()}</div><p class="subtle-label">${connection.updates?.checked_at ? `마지막 성공 확인 ${esc(localTime(connection.updates.checked_at))} · ` : ''}운영 모드는 앱 접속 시와 이후 하루 간격으로 GitHub 정식 릴리스를 확인합니다.</p>${button('check-updates','업데이트 확인')}</section>`;
+}
+
 function settingsView() {
-  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${field('자동 잠금 대기 시간 (분)','idle_minutes',data.settings.idle_minutes ?? 15,'number','min="1" max="240" step="1" required')}<p class="subtle-label">1~240분 · 기본 15분 · 조회 자동 갱신은 대기 시간을 연장하지 않습니다.</p>${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div>${attendanceRulesSettings()}${vaultView()}${personalSettings()}`;
+  return `${header('PREFERENCES','작업 공간 설정','근무 기준과 로컬 보관함을 관리하세요.')}<div class="settings-grid"><section class="card"><div class="card-heading"><h2>기본 설정</h2></div><form data-form="settings">${field('주간 근무 알림 기준 (시간)','weekly_hours',data.settings.weekly_limit/60,'number','min="1" max="168" step="0.5" required')}${field('자동 잠금 대기 시간 (분)','idle_minutes',data.settings.idle_minutes ?? 15,'number','min="1" max="240" step="1" required')}<p class="subtle-label">1~240분 · 기본 15분 · 조회 자동 갱신은 대기 시간을 연장하지 않습니다.</p>${select('화면 알림','notifications',[['true','켜짐'],['false','꺼짐']],String(data.settings.notifications))}<p class="subtle-label">시간대 Asia/Seoul · 월요일부터 일요일까지 합산</p><button class="button button-primary" type="submit">설정 저장</button></form></section><section class="card vault-card"><span class="vault-icon">${icon('lock')}</span><span class="eyebrow">LOCAL & ENCRYPTED</span><h2>민감정보 보관함</h2><p>${connection.demo?'가상 데이터 · 서버 종료 시 삭제':'OS 키 저장소와 분리된 인증 암호화 저장'}</p><div class="row-actions">${button('new-secret','정보 등록')}${button('lock','작업 공간 잠금')}</div></section></div>${attendanceRulesSettings()}${vaultView()}${personalSettings()}${updateSettings()}`;
 }
 
 function personalSettings() {
@@ -520,6 +546,16 @@ function personalSettings() {
 }
 let backupRevision = 0;
 async function personalAction(action, id) {
+  if (action === 'check-updates') {
+    connection.updates = await api('updates/check', {});
+    updateNotice();
+    for (let attempt = 0; attempt < 10 && connection.updates.status === 'checking'; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 700));
+      connection.updates = (await api('status')).updates;
+      updateNotice();
+    }
+    return true;
+  }
   if (action === 'backup-now') {
     await api('backups', {});
     await refresh();
@@ -586,13 +622,13 @@ function helpView() {
       <ol><li><strong>실행·잠금 해제:</strong> 서버가 자동으로 연 브라우저에서 잠금을 해제합니다. 처음 사용하는 PC는 빈 저장소로 시작합니다.</li>
       <li><strong>출근:</strong> 홈의 출근 버튼 또는 명령 입력란에 ‘출근’을 입력합니다. 출근 기록과 오늘 챙길 일을 확인합니다.</li>
       <li><strong>업무 중:</strong> 업무를 추가하고 진행 상태·소요시간·수행 결과를 기록합니다. 필요할 때 휴게 시작·종료도 남깁니다.</li>
-      <li><strong>퇴근:</strong> 야근 여부를 선택하고 퇴근을 기록합니다. 생성된 일일 보고를 확인·편집한 뒤 저장하고 PNG 또는 텍스트로 공유합니다.</li></ol>
+      <li><strong>퇴근:</strong> 야근 여부를 선택하고 퇴근을 기록합니다. 일일 보고는 기록 / 보고의 ‘업무 로그로 초안 생성’ 버튼으로 생성하고 편집·저장합니다.</li></ol>
       <p>설정의 <strong>근무시간 기록 기본설정</strong>에서 회사 기준을 먼저 저장하면 합계에 반영됩니다. 데모는 가상 데이터를 메모리에만 보관하며 종료하면 사라집니다.</p>
       <button class="button button-outline" data-nav="home">홈 열기</button></section>
     <section class="card help-section" aria-labelledby="help-tasks"><h2 id="help-tasks" tabindex="-1">업무 · 리스트와 칸반</h2>
       <ul><li><strong>추가·수정:</strong> 제목, 줄별 메모, 분류, 우선순위(P1 높음 / P2 보통 / P3 낮음), 예정일, 예상 소요시간(분), 진행도를 입력합니다.</li>
       <li><strong>필터:</strong> 상태·분류·우선순위·예정일을 함께 선택합니다. 예정일은 오늘·이번 주(월~일)·오늘 이전·미정·기간 지정으로 좁힐 수 있습니다. 리스트와 칸반 전환 시 조건을 유지합니다.</li>
-      <li><strong>칸반:</strong> 카드를 드래그해 상태를 옮깁니다. 터치·키보드에서는 수정을 사용합니다. ‘내용’에서 상세를 열고 닫기·Esc로 돌아옵니다.</li>
+      <li><strong>칸반:</strong> 업무 화면은 칸반을 기본으로 열고 칸반 → 리스트 순서로 전환합니다. 오늘 등록한 업무에는 new!가 표시됩니다. 카드를 드래그해 상태를 옮깁니다. 터치·키보드에서는 수정을 사용합니다. ‘내용’에서 상세를 열고 닫기·Esc로 돌아옵니다.</li>
       <li><strong>시간 기록:</strong> 입력할 때마다 소요시간이 <em>누적</em>됩니다. 잘못 입력했다면 아래 ‘오늘 입력한 업무 기록’의 ‘정정’을 사용합니다. 필터를 걸면 이 기록과 합계도 해당 조건으로 좁혀집니다.</li>
       <li><strong>진행도·보관:</strong> 진행도는 직접 입력하며 상태 이동으로 자동 계산하지 않습니다. 완료한 업무도 보드에 남습니다. ‘보관’을 누르면 기본 보기에서 숨겨지고 ‘보관’ 필터에서 수정해 다시 꺼낼 수 있습니다.</li></ul>
       <button class="button button-outline" data-nav="tasks">업무 열기</button></section>
@@ -612,7 +648,7 @@ function helpView() {
       <button class="button button-outline" data-record="time">근무 기록 열기</button></section>
     <section class="card help-section" aria-labelledby="help-reports"><h2 id="help-reports" tabindex="-1">일일 보고 · PNG와 텍스트</h2>
       <p>기록 → 일일 보고에서 날짜를 선택하고 초안을 생성합니다. 해당 날짜의 업무 로그가 진행사항으로 모이며 미완료 업무는 예정사항에 들어갑니다. 내용·소요시간·계획을 편집한 뒤 <strong>보고서 저장</strong>을 누릅니다.</p>
-      <p>PNG는 진행·예정사항을 한 장으로 보여주고, 상세내용은 입력한 줄마다 점으로 구분합니다. 아래 텍스트 보고는 <strong>당일 진행 업무만</strong> 포함하며 복사 버튼으로 가져갈 수 있습니다. 예정업무는 텍스트에 포함하지 않습니다.</p>
+      <p>퇴근 시 작성 중이거나 저장한 보고서를 보존합니다. PNG는 진행·예정사항의 우선순위·진행도를 한 장으로 보여주고, 보고 날짜에 등록한 업무는 new!로 강조합니다. 상세내용은 입력한 줄마다 점으로 구분합니다. 아래 텍스트 보고는 <strong>당일 진행 업무만</strong> 포함하며 복사 버튼으로 가져갈 수 있습니다. 예정업무는 텍스트에 포함하지 않습니다.</p>
       <p>보고의 업무별 소요시간은 직접 기록한 값의 합계로, 출퇴근으로 계산한 근무시간과 다를 수 있습니다. 근무 산정 규칙을 바꿔도 이미 저장한 보고서는 자동 수정되지 않습니다. 필요하면 다시 생성·편집·저장하세요.</p>
       <button class="button button-outline" data-record="report">일일 보고 열기</button></section>
     <section class="card help-section" aria-labelledby="help-vault"><h2 id="help-vault" tabindex="-1">민감정보 보관함</h2>
@@ -622,6 +658,7 @@ function helpView() {
       <button class="button button-outline" data-nav="settings">설정 열기</button></section>
     <section class="card help-section" aria-labelledby="help-manage"><h2 id="help-manage" tabindex="-1">관리 · 문제 해결</h2>
       <details open><summary>실행·업데이트·연결 오류</summary><p>프로젝트 폴더에서 다음을 실행합니다. 서버 창을 닫거나 앱을 종료하면 다시 실행해야 합니다.</p><pre><code>.\\.venv\\Scripts\\python.exe -m apps.server</code></pre>
+      <p>설정 → 업데이트 확인에서 GitHub 최신 정식 릴리스와 현재 버전을 비교합니다. 운영 모드는 접속 시와 이후 하루 간격으로 자동 확인하며 새 버전은 하단에 표시합니다. 릴리스 보기에서 변경 내용을 확인하고 설치 ZIP을 받을 수 있습니다.</p>
       <p>화면 변경은 새로고침, 서버/API 변경은 종료 후 재실행이 필요합니다. ‘로컬 화면을 다시 열어주세요’가 나오면 서버가 자동으로 연 브라우저를 사용하세요. 기본 주소는 http://127.0.0.1:4173입니다.</p>
       <p>설정 → 앱 종료로 정상 종료하거나 서버 터미널에서 Ctrl+C를 누릅니다. 다른 프로그램을 임의로 종료하지 말고, 포트가 사용 중이면 기존 후임 서버 실행 여부를 확인하세요.</p></details>
       <details><summary>데이터 위치·백업·다른 PC 복구</summary><p>기본 운영 데이터는 %LOCALAPPDATA%\\Whoiam\\.private\\production\\에 암호화 저장됩니다. 키는 Windows 계정의 OS 보안 저장소에 별도로 보관합니다. 개발·테스트 프로필은 분리됩니다.</p>
@@ -639,7 +676,7 @@ function render() {
     .page)[1];
   document.getElementById('view-toggle').innerHTML = icon(state.compact ? 'desktop' : 'phone');
   document.querySelector('.workspace-footer').innerHTML =
-    `<span><span class="tiny-dot"></span>${connection.demo?'임시 데모 · 가상 데이터만 사용하세요':connection.locked?'로컬 작업 공간 · 잠김':'로컬 암호화 저장 · 외부 전송 없음'}</span><span>whoiam(후임) · v0.05</span>`;
+    `<span><span class="tiny-dot"></span>${connection.demo?'임시 데모 · 가상 데이터만 사용하세요':connection.locked?'로컬 작업 공간 · 잠김':'로컬 암호화 저장'}</span><span id="update-notice">${connection.updates?.available ? updateMarkup() : ''}</span><span>whoiam(후임) · v${esc(connection.version || '0.05.1')}</span>`;
   document.querySelector('.device-status').innerHTML =
     `<span class="node-dot"></span>${esc({production:'운영',development:'개발',test:'테스트',demo:'임시 데모'}[connection.profile] || (connection.demo?'임시 데모':'로컬 장치'))}`;
   const main = document.getElementById('main-content');
@@ -931,7 +968,7 @@ async function act(action, id) {
   }
   if (action === 'finish') {
     showDialog('퇴근 전 확인',
-      `<p>오늘 근무 ${duration(data.attendance.today_minutes)} · 주간 ${duration(data.attendance.week_minutes)}</p>${alertList()}${select('이 근무 기록의 야근 여부','finish-overtime',[['false','일반 근무'],['true','야근 · 퇴근 준비시간 인정']],String(data.attendance.active?.overtime || false))}<p>퇴근 시 실제 기록으로 일일 업무보고 초안을 생성합니다.</p>${button('confirm-finish','퇴근 기록·보고서 생성','','button-primary')}${button('close','돌아가기')}`
+      `<p>오늘 근무 ${duration(data.attendance.today_minutes)} · 주간 ${duration(data.attendance.week_minutes)}</p>${alertList()}${select('이 근무 기록의 야근 여부','finish-overtime',[['false','일반 근무'],['true','야근 · 퇴근 준비시간 인정']],String(data.attendance.active?.overtime || false))}<p>일일 보고 초안은 기록 / 보고에서 필요할 때 생성하세요.</p>${button('confirm-finish','퇴근 기록','','button-primary')}${button('close','돌아가기')}`
     );
     return;
   }
@@ -941,10 +978,7 @@ async function act(action, id) {
     if (active && Boolean(active.overtime) !== overtime) await run('attendance.overtime', {id:active.id,overtime});
     const result = await run('core.finish');
     closeDialog();
-    if (result.report) {
-      loadReport(result.report);
-      navigateTarget('report');
-    } else navigateTarget('time');
+    navigateTarget('time');
     toast(result.message);
     return;
   }
@@ -1479,6 +1513,7 @@ async function poll() {
         ...connection,
         ...status
       };
+      updateNotice();
       if (status.locked) {
         data = null;
         clearPrivateView();

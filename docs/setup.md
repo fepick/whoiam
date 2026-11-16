@@ -5,17 +5,17 @@ Windows 10/11 · Python 3.11 이상을 기준으로 합니다. 현재 사용자 
 
 ## 파일 준비
 
-검증된 `whoiam-0.05.zip`을 받았다면 원하는 폴더에 압축을 풉니다. 기존 `.venv`나 운영 데이터는 복사하지 않습니다.
-ZIP과 함께 받은 `.sha256`의 해시와 `Get-FileHash .\whoiam-0.05.zip -Algorithm SHA256` 결과를 대조할 수 있습니다.
+검증된 `whoiam-0.05.1.zip`을 받았다면 원하는 폴더에 압축을 풉니다. 기존 `.venv`나 운영 데이터는 복사하지 않습니다.
+ZIP과 함께 받은 `.sha256`의 해시와 `Get-FileHash .\whoiam-0.05.1.zip -Algorithm SHA256` 결과를 대조할 수 있습니다.
 Git으로 설치할 때는 접근 권한이 있는 계정으로 다음을 실행합니다. GitHub 로그인은 직접 진행하고 비밀번호·토큰을 AI에게 보내지 않습니다.
 
 ```powershell
-git clone --branch v0.05 https://github.com/fepick/whoiam.git
+git clone --branch v0.05.1 https://github.com/fepick/whoiam.git
 cd whoiam
 ```
 
-재현 가능한 설치에는 승인된 릴리스 태그 `v0.05`를 사용합니다. 태그로 clone하면 detached HEAD 상태가 되는 것은 정상입니다.
-최신 통합 버전이 필요하면 위 명령의 `--branch v0.05`를 `--branch main`으로 바꿉니다.
+재현 가능한 설치에는 승인된 릴리스 태그 `v0.05.1`을 사용합니다. 태그로 clone하면 detached HEAD 상태가 되는 것은 정상입니다.
+최신 통합 버전이 필요하면 위 명령의 `--branch v0.05.1`을 `--branch main`으로 바꿉니다.
 릴리스 작업 브랜치는 통합 후 삭제될 수 있으므로 설치 대상으로 사용하지 않습니다.
 저장소 접근 권한이 없는 사용자에게는 Git 이력이 없는 검증된 소스 ZIP을 전달합니다.
 
@@ -63,7 +63,7 @@ ZIP을 풀거나 저장소를 clone한 다음, **프로젝트 폴더에서** AI 
 
 1. AGENTS.md와 docs/setup.md를 읽고 기존 변경을 보존해라.
 2. Git checkout이면 현재 태그·브랜치와 미커밋 변경을 확인해 알려라.
-   설치 기준은 승인된 v0.05 태그 또는 main이다. 다른 작업 브랜치나 기존 변경을 임의로 전환·초기화하지 마라.
+   설치 기준은 승인된 v0.05.1 태그 또는 main이다. 다른 작업 브랜치나 기존 변경을 임의로 전환·초기화하지 마라.
 3. Python 3.11 이상을 확인하고 scripts/Setup-Whoiam.ps1로 .venv와 requirements.txt를 설치해라.
    정책이 스크립트를 차단하면 문서의 직접 명령을 사용해라. 실행 정책·방화벽을 변경하지 마라.
    Python이 없으면 설치해야 할 항목을 알려라. 기존 Python이나 가상환경을 삭제하지 마라.
@@ -77,7 +77,15 @@ Git push, 외부 배포, 로그인 자동 실행 등록은 하지 마라.
 성공한 점검과 설치가 막힌 항목을 구분해서 보고해라.
 ```
 
-## 개발자 설치
+## 기존 설치 업데이트
+
+편집 내용을 저장하고 설정 → 개인 실사용 관리 → 앱 종료로 서버를 정상 종료합니다. 설정 → 업데이트 확인의 릴리스 보기에서 배포 버전과 변경 내용을 확인할 수 있습니다.
+
+ZIP 설치는 새 버전의 ZIP과 SHA-256 파일을 받아 해시를 대조하고 새 폴더에 풀어 위 설치 절차를 진행합니다. 기존 운영 홈은 같은 Windows 계정에서 계속 사용합니다.
+
+Git 설치는 미커밋 변경을 먼저 보존하고 `git fetch origin --tags` 후 승인된 태그를 선택합니다. 이번 버전은 `git switch --detach v0.05.1`로 선택하며, `requirements.txt` 의존성을 설치한 뒤 서버를 다시 실행합니다.
+
+## 개발 환경
 
 Git clone에서 `scripts/Setup-Whoiam.ps1 -Dev`로 개발 의존성까지 설치합니다.
 Git·PowerShell이 준비된 환경에서 `scripts/Install-GitHooks.ps1`로 훅을 설치하고 [개발 안내](../CONTRIBUTING.md)의 검증을 따릅니다.
