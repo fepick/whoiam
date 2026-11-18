@@ -49,3 +49,10 @@
 - Git 저장소가 있으면 `scripts/Check-SensitivePaths.ps1 -IncludeHistory`도 실행한다.
 - 실제 값이나 파일 내용을 검사 로그에 출력하지 않는다.
 - 현재 경로 검사는 내용 기반 비밀 탐지, 파일 암호화, OS 접근 제어를 대체하지 않는다.
+
+
+<!-- Ochestra managed link v1 -->
+## Ochestra 공통 관리
+
+기존 프로젝트 지침을 보존하고 우선 적용한다. 추가 공통 규칙은 [docs/ochestra/common.md](docs/ochestra/common.md), 프로젝트별 역할·제약은 [docs/ochestra/project.md](docs/ochestra/project.md)를 읽는다. 역할은 project.json의 primaryRoles/onDemandRoles에서 작업 범위에 맞게 선택한다. 공통 규칙은 기존 도구·훅·설정을 교체하지 않는다.
+<!-- /Ochestra managed link v1 -->
