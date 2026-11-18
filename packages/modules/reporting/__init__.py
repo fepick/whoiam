@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from packages.modules.attendance import Attendance
+from packages.modules.reporting.weekly import WeeklyMeetings
 from packages.modules.tasks import Tasks
 from packages.platform.domain import (
     SEOUL,
@@ -27,6 +28,7 @@ class Reporting:
         self, store: EncryptedStore, tasks: Tasks, attendance: Attendance
     ) -> None:
         self.reports = store.scope("reporting.reports")
+        self.weekly = WeeklyMeetings(store, tasks)
         self.tasks = tasks
         self.attendance = attendance
 

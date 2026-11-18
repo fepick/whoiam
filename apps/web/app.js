@@ -68,6 +68,7 @@ let connection = {
 };
 let currentReport = '';
 let reportDirty = false;
+let weekly = {};
 let pendingRequest = null;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({
   '&': '&amp;',
@@ -202,6 +203,7 @@ function clearPrivateView() {
   state.vaultPage = 0;
   currentReport = '';
   reportDirty = false;
+  weekly = {};
   pendingRequest = null;
   window.WhoiamReport.load({
     date: '',
@@ -470,7 +472,104 @@ function reportView() {
 }
 
 function recordsView() {
-  return `${header('TIME & DAILY LOG','나의 기록','근무시간과 직접 기록한 업무 소요시간을 구분합니다.')}<div class="toolbar"><div class="tabs">${[['time','근무'],['report','일일 보고']].map(([id,label])=>`<button data-record="${id}" class="${state.recordTab===id?'active':''}">${label}</button>`).join('')}</div></div>${state.recordTab==='time'?timeView():reportView()}`;
+  const tabs = [['time', '근무'], ['report', '일일 보고'], ['weekly', '주간 미팅']];
+  const views = {time: timeView, report: reportView, weekly: weeklyMeetingView};
+  return `${header('TIME & DAILY LOG','나의 기록','근무시간과 직접 기록한 업무 소요시간을 구분합니다.')}
+    <div class="toolbar"><div class="tabs">${tabs.map(([id, label]) =>
+      `<button data-record="${id}" aria-pressed="${state.recordTab === id}" class="${state.recordTab === id ? 'active' : ''}">${label}</button>`
+    ).join('')}</div></div>${views[state.recordTab]()}`;
+}
+
+function weeklyMeetingView() {
+  const draft = weekly.draft;
+  const saved = data.weekly_meetings || [];
+  return `<fieldset id="weekly-controls" class="weekly-controls" ${weekly.pending ? 'disabled' : ''}>
+    <section class="card wide-card">
+      <div class="card-heading"><h2>주간 미팅 발표자료 초안</h2></div>
+      <form data-form="weekly-preview">
+        <div class="weekly-period">
+          ${field('시작일', 'weekly-start', weekly.start ?? data.attendance.week_start, 'date', 'required')}
+          ${field('종료일', 'weekly-end', weekly.end ?? data.today, 'date', 'required')}
+          <button class="button button-primary" type="submit">업무 로그로 초안 생성</button>
+        </div>
+        <p class="form-error" role="alert"></p>
+      </form>
+      ${saved.length ? select('저장된 발표 초안', 'saved-weekly', [
+        ['', '선택'], ...saved.map((row, index) => [
+          row.id, `${row.start_date} ~ ${row.end_date} · 초안 ${saved.length - index}`
+        ])
+      ], draft?.id) : ''}
+      ${draft && !draft.sources.length ? '<p class="empty-hint" role="status">선택한 기간에 업무 로그가 없습니다.</p>' : ''}
+    </section>
+    ${draft?.sources.length ? `<section class="card wide-card">
+      <div class="card-heading"><h2>발표 초안 편집</h2><span>${esc(draft.start_date)} ~ ${esc(draft.end_date)}</span></div>
+      <form data-form="weekly-save">
+        <label class="entry-field">발표 내용<textarea name="weekly-body" rows="16" required>
+${esc(draft.body)}</textarea></label>
+        <p class="form-error" role="alert"></p>
+        <button class="button button-primary" type="submit">발표 초안 저장</button>
+      </form>
+      <details class="weekly-sources" ${weekly.sourcesOpen ? 'open' : ''}>
+        <summary>원본 업무 로그 ${draft.sources.length}건</summary>
+        <ul>${draft.sources.map(log => `<li>
+          <strong>${esc(log.date)} · ${esc(log.title)}</strong>
+          <small>${esc(labels[log.status])} · ${duration(log.minutes)} · 우선순위 ${esc(log.priority ?? '미기록')} · 진행도 ${log.progress == null ? '미기록' : `${esc(log.progress)}%`}</small>
+          ${log.note ? `<p>${esc(log.note)}</p>` : ''}
+          <small>로그 ID ${esc(log.id)}</small>
+        </li>`).join('')}</ul>
+      </details>
+    </section>` : ''}
+  </fieldset>`;
+}
+
+function setWeeklyPending(pending) {
+  weekly.pending = pending;
+  const controls = document.getElementById('weekly-controls');
+  if (controls) controls.disabled = pending;
+}
+
+async function loadWeeklyMeeting(path) {
+  if (weekly.pending || (weekly.dirty && !confirm('저장하지 않은 발표 초안을 바꿀까요?'))) return;
+  const editor = weekly;
+  setWeeklyPending(true);
+  try {
+    const draft = await api(path);
+    if (weekly !== editor || connection.locked) return;
+    weekly.draft = draft;
+    weekly.dirty = !draft.id && Boolean(draft.body);
+    weekly.sourcesOpen = false;
+    weekly.start = draft.start_date;
+    weekly.end = draft.end_date;
+    setWeeklyPending(false);
+    render();
+    document.querySelector('[name="weekly-body"]')?.focus({preventScroll: true});
+  } finally {
+    if (weekly === editor) setWeeklyPending(false);
+  }
+}
+
+async function saveWeeklyMeeting(body) {
+  if (weekly.pending) return;
+  const editor = weekly;
+  const draft = editor.draft;
+  const reference = draft.id ? {id: draft.id} : {
+    start_date: draft.start_date,
+    end_date: draft.end_date,
+    source_ids: draft.sources.map(log => log.id)
+  };
+  setWeeklyPending(true);
+  try {
+    const saved = await run('reporting.weekly_save', {...reference, body});
+    if (weekly !== editor || connection.locked) return;
+    draft.id = saved.id;
+    draft.body = body;
+    editor.dirty = false;
+    setWeeklyPending(false);
+    render();
+    toast('발표 초안을 암호화 저장했습니다.');
+  } finally {
+    if (weekly === editor) setWeeklyPending(false);
+  }
 }
 
 const vaultKinds = {credential:'로그인 정보','payment-method':'결제수단 참조',person:'개인정보'};
@@ -611,7 +710,7 @@ async function personalAction(action, id) {
 }
 
 function helpView() {
-  const topics = [['intro','후임 소개'],['start','빠른 시작'],['tasks','업무'],['materials','구매·재고'],['attendance','근무 기록'],['reports','일일 보고'],['vault','민감정보 보관함'],['manage','관리·문제 해결']];
+  const topics = [['intro','후임 소개'],['start','빠른 시작'],['tasks','업무'],['materials','구매·재고'],['attendance','근무 기록'],['reports','일일 보고'],['weekly','주간 미팅'],['vault','민감정보 보관함'],['manage','관리·문제 해결']];
   return `${header('WHOIAM GUIDE','whoiam(후임) 도움말','반복되는 일을 챙기고, 하루의 기록을 다음 할 일로 연결합니다.')}
     <div class="help-layout"><nav class="card help-topics" aria-label="도움말 목차"><h2>사용 안내</h2>${topics.map(([id,label])=>`<button type="button" data-help-section="${id}">${label}</button>`).join('')}</nav><div class="help-articles">
     <section class="card help-section" aria-labelledby="help-intro"><h2 id="help-intro" tabindex="-1">후임 소개</h2>
@@ -651,6 +750,10 @@ function helpView() {
       <p>퇴근 시 작성 중이거나 저장한 보고서를 보존합니다. PNG는 진행·예정사항의 우선순위·진행도를 한 장으로 보여주고, 보고 날짜에 등록한 업무는 new!로 강조합니다. 상세내용은 입력한 줄마다 점으로 구분합니다. 아래 텍스트 보고는 <strong>당일 진행 업무만</strong> 포함하며 복사 버튼으로 가져갈 수 있습니다. 예정업무는 텍스트에 포함하지 않습니다.</p>
       <p>보고의 업무별 소요시간은 직접 기록한 값의 합계로, 출퇴근으로 계산한 근무시간과 다를 수 있습니다. 근무 산정 규칙을 바꿔도 이미 저장한 보고서는 자동 수정되지 않습니다. 필요하면 다시 생성·편집·저장하세요.</p>
       <button class="button button-outline" data-record="report">일일 보고 열기</button></section>
+    <section class="card help-section" aria-labelledby="help-weekly"><h2 id="help-weekly" tabindex="-1">주간 미팅 발표자료 초안</h2>
+      <p>기록 → 주간 미팅에서 기간을 지정해 업무 로그로 초안을 생성합니다. 기본 기간은 한국 시간 기준 이번 주 월요일부터 오늘까지입니다.</p>
+      <p>업무 로그 메모에 ‘성과:’, ‘문제:’, ‘확인사항:’, ‘다음 행동:’으로 시작하는 줄을 쓰면 해당 발표 항목에 들어갑니다. 원본 업무 로그를 펼쳐 날짜와 메모를 확인하고, 발표 내용을 편집한 뒤 저장하세요.</p>
+      <button class="button button-outline" data-record="weekly">주간 미팅 열기</button></section>
     <section class="card help-section" aria-labelledby="help-vault"><h2 id="help-vault" tabindex="-1">민감정보 보관함</h2>
       <p>설정에서 로그인 정보·결제수단 참조·개인정보를 등록합니다. 목록은 별칭·마스킹만 표시하며 별칭·카드 끝 네 자리 검색과 유형 필터로 찾고 10건씩 넘겨 봅니다.</p>
       <p>‘보기’는 선택한 한 건을 최대 30초 표시합니다. 닫기·Esc·다른 창/탭 이동·잠금 시 숨깁니다. 전체 카드번호·CVC·PIN은 입력하지 않습니다.</p>
@@ -923,7 +1026,7 @@ async function act(action, id) {
     return;
   }
   if (action === 'lock') {
-    if (reportDirty && !confirm('저장하지 않은 보고서 편집 내용이 있습니다. 잠글까요?')) return;
+    if ((reportDirty || weekly.dirty) && !confirm('저장하지 않은 보고 내용이 있습니다. 잠글까요?')) return;
     await api('lock', {});
     await refresh();
     return;
@@ -1221,6 +1324,17 @@ document.addEventListener('submit', async event => {
     const values = Object.fromEntries(new FormData(form));
     const id = form.dataset.id;
     const type = form.dataset.form;
+    if (type === 'weekly-preview' || type === 'weekly-save') {
+      form.querySelector('.form-error').textContent = '';
+      if (type === 'weekly-preview') {
+        const period = new URLSearchParams({
+          start_date: values['weekly-start'],
+          end_date: values['weekly-end']
+        });
+        await loadWeeklyMeeting(`weekly-meetings/preview?${period}`);
+      } else await saveWeeklyMeeting(values['weekly-body']);
+      return;
+    }
     if (type === 'task') {
       await run('tasks.save', {
         ...values,
@@ -1394,6 +1508,18 @@ document.addEventListener('submit', async event => {
 });
 document.addEventListener('change', async event => {
   const input = event.target;
+  if (input.name === 'saved-weekly') {
+    const id = input.value;
+    input.value = weekly.draft?.id || '';
+    if (id) {
+      try {
+        await loadWeeklyMeeting(`weekly-meetings/${encodeURIComponent(id)}`);
+      } catch (error) {
+        toast(error.message);
+      }
+    }
+    return;
+  }
   const taskFilters = {'task-priority':'taskPriority','task-date':'taskDate','task-date-from':'taskDateFrom','task-date-to':'taskDateTo'};
   if (taskFilters[input.name]) {
     if (input.name.startsWith('task-date-') && !input.checkValidity()) {
@@ -1469,6 +1595,20 @@ document.addEventListener('change', async event => {
 document.addEventListener('whoiam-report-change', () => {
   reportDirty = true;
 });
+document.addEventListener('input', event => {
+  const {name, value} = event.target;
+  if (name === 'weekly-start') weekly.start = value;
+  if (name === 'weekly-end') weekly.end = value;
+  if (name === 'weekly-body') {
+    weekly.draft.body = value;
+    weekly.dirty = true;
+  }
+});
+document.addEventListener('toggle', event => {
+  if (event.target.matches('.weekly-sources') && event.target.isConnected) {
+    weekly.sourcesOpen = event.target.open;
+  }
+}, true);
 document.getElementById('view-toggle').addEventListener('click', () => {
   state.compact = !state.compact;
   document.body.classList.toggle('compact-mode', state.compact);
@@ -1531,7 +1671,7 @@ async function poll() {
     const arrived = (data?.alerts || []).filter(row => !previous.has(
       `${row.target}:${row.id||''}:${row.title}`));
     if (arrived.length && data.settings.notifications) toast(`새 확인 항목 ${arrived.length}건이 있습니다.`);
-    if (!(state.page === 'records' && state.recordTab === 'report') && !document
+    if (!(state.page === 'records' && ['report', 'weekly'].includes(state.recordTab)) && !document
       .querySelector('form:focus-within')) render();
   } catch (error) {
     if (connection.locked) render();

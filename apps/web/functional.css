@@ -46,3 +46,30 @@ dialog{max-height:calc(100dvh / var(--ui-scale) - 32px)}
 .task-new{background:#fff0bb;color:#795200;font-weight:700;white-space:nowrap;vertical-align:middle}
 
 .workspace-footer{flex-wrap:wrap;gap:8px}#update-notice{color:#795200}#update-notice:empty{display:none}#update-notice a,#update-details a{color:var(--green);text-decoration:underline}#update-details{line-height:1.7;overflow-wrap:anywhere}
+.weekly-controls {
+  min-inline-size: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.weekly-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+.weekly-period .entry-field {
+  flex: 1 1 145px;
+  max-width: 220px;
+  margin: 0;
+}
+.weekly-sources {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.weekly-sources summary { cursor: pointer; font-weight: 650; }
+.weekly-sources ul { padding-inline-start: 20px; }
+.weekly-sources li { margin-block: 12px; overflow-wrap: anywhere; }
+.weekly-sources small { display: block; }
+.weekly-sources p { margin-block: 4px; white-space: pre-wrap; }

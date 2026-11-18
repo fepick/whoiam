@@ -50,13 +50,19 @@ POST는 같은 Origin, 세션 쿠키, `X-Whoiam-CSRF`, JSON, 요청 크기 상�
 | inventory | `save`, `move`, `adjust`, `bom`, `preview`, `assemble` |
 | purchasing | `create`, `update`, `receive`, `document` |
 | attendance | `break_start`, `break_end`, `record`, `payroll` |
-| reporting | `generate`, `save` |
+| reporting | `generate`, `save`, `weekly_save` |
 | sensitive | `save`, `remove`, `upload` |
 | core | `start`, `finish`, `settings`, `command` |
 
 명령 이름은 `모듈.명령` 형태입니다. `core.command`는 정해진 한국어 명령만 해석하며 입력을 외부 AI에 전송하지 않습니다.
 수량·원화 금액·분은 정수입니다. 시각은 ISO 8601 오프셋을 포함하고 날짜는 `YYYY-MM-DD`를 사용합니다.
 보고서 ETA의 편집 값은 한국 시간의 `YYYY-MM-DDTHH:mm`입니다.
+
+### 주간 미팅 발표 초안
+
+- `GET /api/weekly-meetings/preview?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`는 양끝을 포함한 기간의 초안 `body`와 원본 업무 로그 `sources`를 반환합니다. 빈 기간이면 본문과 원본 목록이 비어 있습니다.
+- `reporting.weekly_save`는 새 초안의 `start_date`, `end_date`, `body`, `source_ids`를 받아 저장하고 `id`를 반환합니다. 저장본을 편집할 때는 `id`와 `body`만 보냅니다.
+- `snapshot.weekly_meetings`에는 저장된 초안의 ID와 기간이 포함됩니다. `GET /api/weekly-meetings/{id}`는 저장 본문과 연결된 원본 업무 로그를 반환합니다. 조회에는 로컬 세션과 잠금 해제가 필요합니다.
 
 `attendance.record`는 겹친 기존 세션 전체를 이력으로 보관하고 수동 입력을 우선 적용합니다.
 현재 기록의 응답에는 `source`와 `replaces`가 포함되며 `snapshot.attendance_history`에서 제외된 원본과 정정 전 이력을 조회합니다.

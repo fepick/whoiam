@@ -174,6 +174,16 @@ def create_app(
             store.touched = last_activity
             return result
 
+    @app.get("/api/weekly-meetings/preview")
+    def weekly_meeting_preview(start_date: str, end_date: str) -> Json:
+        with store.transaction():
+            return core.reporting.weekly.preview(start_date, end_date)
+
+    @app.get("/api/weekly-meetings/{identifier}")
+    def weekly_meeting(identifier: str) -> Json:
+        with store.transaction():
+            return core.reporting.weekly.get(identifier)
+
     @app.post("/api/unlock")
     def unlock() -> Json:
         store.unlock()

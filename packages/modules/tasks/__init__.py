@@ -153,8 +153,15 @@ class Tasks:
         ]
 
     def daily(self, when: str) -> list[Json]:
-        day(when)
-        return [entry for entry in self.logs.all() if entry["date"] == when]
+        return self.logs_between(when, when)
+
+    def logs_between(self, start: str, end: str) -> list[Json]:
+        if day(start) > day(end):
+            raise DomainError("시작일은 종료일보다 늦을 수 없습니다.")
+        return sorted(
+            (entry for entry in self.logs.all() if start <= entry["date"] <= end),
+            key=lambda entry: entry["date"],
+        )
 
     def update_log(self, data: Json) -> Json:
         fields(data, {"id", "minutes", "note"})
