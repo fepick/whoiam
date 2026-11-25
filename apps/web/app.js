@@ -69,6 +69,7 @@ let connection = {
 let currentReport = '';
 let reportDirty = false;
 let weekly = {};
+let calendar = {};
 let pendingRequest = null;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({
   '&': '&amp;',
@@ -204,6 +205,7 @@ function clearPrivateView() {
   currentReport = '';
   reportDirty = false;
   weekly = {};
+  calendar = {};
   pendingRequest = null;
   window.WhoiamReport.load({
     date: '',
@@ -472,12 +474,88 @@ function reportView() {
 }
 
 function recordsView() {
-  const tabs = [['time', '근무'], ['report', '일일 보고'], ['weekly', '주간 미팅']];
-  const views = {time: timeView, report: reportView, weekly: weeklyMeetingView};
+  const tabs = [['time', '근무'], ['calendar', '월간 달력'], ['report', '일일 보고'], ['weekly', '주간 미팅']];
+  const views = {time: timeView, calendar: calendarView, report: reportView, weekly: weeklyMeetingView};
   return `${header('TIME & DAILY LOG','나의 기록','근무시간과 직접 기록한 업무 소요시간을 구분합니다.')}
     <div class="toolbar"><div class="tabs">${tabs.map(([id, label]) =>
       `<button data-record="${id}" aria-pressed="${state.recordTab === id}" class="${state.recordTab === id ? 'active' : ''}">${label}</button>`
     ).join('')}</div></div>${views[state.recordTab]()}`;
+}
+
+function adjacentMonth(month, offset) {
+  const date = new Date(`${month}-01T00:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() + offset);
+  return date.toISOString().slice(0, 7);
+}
+
+function calendarDayView(row) {
+  const tasks = new Map(row.logs.map(log => [log.task_id, log.title]));
+  const hours = Math.floor(row.work_minutes / 60);
+  const minutes = row.work_minutes % 60;
+  const time = [hours ? `${hours}시간` : '', minutes ? `${minutes}분` : ''].filter(Boolean).join(' ');
+  const work = time || (row.provisional ? '0분' : '');
+  const details = [row.date, tasks.size ? `업무 ${tasks.size}건` : '', work ? `근무 ${work}` : '', row.provisional ? '잠정' : ''];
+  return `<button type="button" class="calendar-day" data-calendar-date="${esc(row.date)}"
+    aria-label="${esc(details.filter(Boolean).join(' · '))}"
+    aria-pressed="${row.date === calendar.selected}" ${row.date === data.today ? 'aria-current="date"' : ''}>
+    <span class="calendar-day-number">${Number(row.date.slice(-2))}</span>
+    ${work ? `<span class="calendar-work">${work}${row.provisional ? '*' : ''}</span>` : ''}
+    ${tasks.size ? `<span class="calendar-task-count">업무 ${tasks.size}건</span>
+      <span class="calendar-task-title">${esc(tasks.values().next().value)}</span>` : ''}
+  </button>`;
+}
+
+function calendarView() {
+  const month = calendar.month || data.today.slice(0, 7);
+  const [year, number] = month.split('-').map(Number);
+  const summary = calendar.result;
+  const selected = summary?.days.find(row => row.date === calendar.selected);
+  return `<div class="calendar-layout"><section class="card wide-card calendar-card" aria-labelledby="calendar-title">
+    <div class="calendar-heading">
+      <h2 id="calendar-title">${year}년 ${number}월</h2>
+      <div class="row-actions">
+        <button type="button" class="button button-outline" data-calendar-move="-1" ${month === '0001-01' ? 'disabled' : ''}>이전 달</button>
+        <button type="button" class="button button-outline" data-calendar-move="0">이번 달</button>
+        <button type="button" class="button button-outline" data-calendar-move="1" ${month === '9999-11' ? 'disabled' : ''}>다음 달</button>
+      </div>
+    </div>
+    ${calendar.error ? `<p class="form-error" role="alert">${esc(calendar.error)}</p>${button('calendar-retry','다시 조회')}` : ''}
+    ${summary ? `<p class="calendar-summary">이달 근무 <strong>${duration(summary.work_minutes)}</strong>
+      ${summary.days.some(row => row.provisional) ? '<small>* 진행 중인 근무를 포함한 잠정 시간</small>' : ''}</p>
+      <div class="calendar-grid">
+        ${['월','화','수','목','금','토','일'].map(day => `<span class="calendar-weekday">${day}</span>`).join('')}
+        ${'<span class="calendar-blank" aria-hidden="true"></span>'.repeat(summary.first_weekday)}
+        ${summary.days.map(calendarDayView).join('')}
+      </div>` : calendar.error ? '' : '<p class="empty-hint" role="status">달력을 불러오고 있습니다.</p>'}
+  </section>
+  ${selected ? `<section class="card wide-card calendar-detail" aria-labelledby="calendar-date-title">
+    <div class="card-heading"><h2 id="calendar-date-title">${esc(selected.date)} 기록</h2>
+      <span>근무 ${duration(selected.work_minutes)}${selected.provisional ? ' · 잠정' : ''}</span></div>
+    ${selected.logs.length ? `<ul>${selected.logs.map(log => `<li>
+      <strong>${esc(log.title)}</strong>
+      <small>${esc(labels[log.status])} · 업무 소요시간 ${duration(log.minutes)}</small>
+      ${log.note ? `<p>${esc(log.note)}</p>` : ''}
+    </li>`).join('')}</ul>` : empty('기록된 업무가 없습니다.')}
+  </section>` : ''}</div>`;
+}
+
+async function loadCalendar(month, selected, focus = '') {
+  if (!data || connection.locked) return;
+  const today = data.today;
+  const request = {month, selected: selected || (today.startsWith(month) ? today : `${month}-01`)};
+  const alreadyOpen = Boolean(calendar.month);
+  calendar = request;
+  if (alreadyOpen) render();
+  if (focus) document.querySelector(focus)?.focus({preventScroll: true});
+  try {
+    request.result = await api(`calendar?month=${encodeURIComponent(month)}`);
+  } catch (error) {
+    request.error = error.message;
+  }
+  if (calendar !== request || state.page !== 'records' || state.recordTab !== 'calendar') return;
+  const restoreFocus = focus && document.activeElement?.matches(focus);
+  render();
+  if (restoreFocus) document.querySelector(focus)?.focus({preventScroll: true});
 }
 
 function weeklyMeetingView() {
@@ -744,7 +822,8 @@ function helpView() {
       <li>기록마다 ‘야근 지정/해제’를 선택합니다. 수동 입력·정정 또는 퇴근 확인 화면에서도 선택할 수 있습니다. 야근이면 준비시간을 인정하지만 직접 입력한 휴게는 차감합니다.</li></ol>
       <p>원본 시각은 유지하고 겹치는 제외·휴게는 한 번만 차감합니다. 규칙은 기존 기록의 일·주간 합계에도 적용되며 매일 한국 날짜 기준입니다. 자정을 넘긴 다음 날의 이른 시간도 제외될 수 있습니다.</p>
       <p>주간 합계는 월~일 기준이며 근무 중인 기록은 잠정값입니다. 주간 알림 기준은 설정에서 변경합니다. 급여 대조는 예상 실수령액과 실제 입금액을 직접 입력해 비교하는 기능입니다.</p>
-      <button class="button button-outline" data-record="time">근무 기록 열기</button></section>
+      <p>월간 달력에서 날짜별 근무시간과 업무 로그를 확인합니다. 날짜를 선택하면 업무 내용과 소요시간이 표시됩니다.</p>
+      <div class="row-actions"><button class="button button-outline" data-record="time">근무 기록 열기</button><button class="button button-outline" data-record="calendar">월간 달력 열기</button></div></section>
     <section class="card help-section" aria-labelledby="help-reports"><h2 id="help-reports" tabindex="-1">일일 보고 · PNG와 텍스트</h2>
       <p>기록 → 일일 보고에서 날짜를 선택하고 초안을 생성합니다. 해당 날짜의 업무 로그가 진행사항으로 모이며 미완료 업무는 예정사항에 들어갑니다. 내용·소요시간·계획을 편집한 뒤 <strong>보고서 저장</strong>을 누릅니다.</p>
       <p>퇴근 시 작성 중이거나 저장한 보고서를 보존합니다. PNG는 진행·예정사항의 우선순위·진행도를 한 장으로 보여주고, 보고 날짜에 등록한 업무는 new!로 강조합니다. 상세내용은 입력한 줄마다 점으로 구분합니다. 아래 텍스트 보고는 <strong>당일 진행 업무만</strong> 포함하며 복사 버튼으로 가져갈 수 있습니다. 예정업무는 텍스트에 포함하지 않습니다.</p>
@@ -802,6 +881,9 @@ function render() {
     };
     main.innerHTML = views[state.page]();
     if (state.page === 'records' && state.recordTab === 'report') window.WhoiamReport.mount();
+    if (state.page === 'records' && state.recordTab === 'calendar' && !calendar.month) {
+      loadCalendar(data.today.slice(0, 7));
+    }
   }
   document.title = `${pageItems.find(row=>row[0]===state.page)[1]} · whoiam(후임)`;
 }
@@ -810,7 +892,9 @@ function navigate(page) {
   hideCredentialView();
   state.page = pageItems.some(row => row[0] === page) ? page : 'home';
   location.hash = state.page;
-  render();
+  if (state.page === 'records' && state.recordTab === 'calendar' && calendar.result) {
+    loadCalendar(calendar.month, calendar.selected);
+  } else render();
   window.scrollTo({
     top: 0,
     behavior: 'instant'
@@ -1282,6 +1366,26 @@ document.addEventListener('click', event => {
     navigate('records');
     return;
   }
+  if (target.dataset.calendarMove) {
+    const offset = Number(target.dataset.calendarMove);
+    const month = offset ? adjacentMonth(calendar.month, offset) : data.today.slice(0, 7);
+    loadCalendar(month, '', `[data-calendar-move="${offset}"]`);
+    return;
+  }
+  if (target.dataset.calendarDate) {
+    calendar.selected = target.dataset.calendarDate;
+    render();
+    document.querySelector(`[data-calendar-date="${calendar.selected}"]`)?.focus({preventScroll: true});
+    const detail = document.getElementById('calendar-date-title');
+    if (event.detail && detail?.getBoundingClientRect().top > window.innerHeight - 100) {
+      detail.scrollIntoView({block: 'nearest'});
+    }
+    return;
+  }
+  if (target.dataset.action === 'calendar-retry') {
+    loadCalendar(calendar.month, calendar.selected);
+    return;
+  }
   if (target.dataset.taskTab) {
     state.taskTab = target.dataset.taskTab;
     render();
@@ -1671,7 +1775,7 @@ async function poll() {
     const arrived = (data?.alerts || []).filter(row => !previous.has(
       `${row.target}:${row.id||''}:${row.title}`));
     if (arrived.length && data.settings.notifications) toast(`새 확인 항목 ${arrived.length}건이 있습니다.`);
-    if (!(state.page === 'records' && ['report', 'weekly'].includes(state.recordTab)) && !document
+    if (!(state.page === 'records' && ['report', 'weekly', 'calendar'].includes(state.recordTab)) && !document
       .querySelector('form:focus-within')) render();
   } catch (error) {
     if (connection.locked) render();

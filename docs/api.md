@@ -58,6 +58,10 @@ POST는 같은 Origin, 세션 쿠키, `X-Whoiam-CSRF`, JSON, 요청 크기 상�
 수량·원화 금액·분은 정수입니다. 시각은 ISO 8601 오프셋을 포함하고 날짜는 `YYYY-MM-DD`를 사용합니다.
 보고서 ETA의 편집 값은 한국 시간의 `YYYY-MM-DDTHH:mm`입니다.
 
+### 월간 달력
+
+`GET /api/calendar?month=YYYY-MM`은 로컬 세션과 잠금 해제가 필요합니다. 한국 시간 기준 월간 근무 합계 `work_minutes`, 월요일이 0인 첫날의 요일 `first_weekday`, 날짜별 `days`를 반환합니다. 날짜별 항목은 `date`, `work_minutes`, 열린 근무 포함 여부 `provisional`, 업무 `logs`를 제공합니다. 월 합계는 초 단위로 합산한 뒤 분으로 변환합니다.
+
 ### 주간 미팅 발표 초안
 
 - `GET /api/weekly-meetings/preview?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`는 양끝을 포함한 기간의 초안 `body`와 원본 업무 로그 `sources`를 반환합니다. 빈 기간이면 본문과 원본 목록이 비어 있습니다.

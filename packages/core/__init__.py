@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from calendar import monthrange
+from datetime import date, datetime, timedelta
 from typing import Callable
 from uuid import UUID
 
@@ -20,6 +21,7 @@ from packages.platform.domain import (
     SEOUL,
     DomainError,
     Json,
+    day,
     fields,
     integer,
     moment,
@@ -78,6 +80,32 @@ class Core:
 
     def today(self) -> str:
         return self.clock().astimezone(SEOUL).date().isoformat()
+
+    def monthly_calendar(self, month: str) -> Json:
+        first = day(f"{month}-01")
+        weekday, days = monthrange(first.year, first.month)
+        last = first + timedelta(days=days - 1)
+        if last == date.max:
+            raise DomainError("조회할 수 있는 마지막 달은 9999년 11월입니다.")
+        with self.store.transaction():
+            attendance = self.attendance.daily_totals(first, days)
+            logs_by_date: dict[str, list[Json]] = {}
+            for log in self.tasks.logs_between(first.isoformat(), last.isoformat()):
+                logs_by_date.setdefault(log["date"], []).append(log)
+            return {
+                "month": month,
+                "first_weekday": weekday,
+                "work_minutes": sum(row["seconds"] for row in attendance) // 60,
+                "days": [
+                    {
+                        "date": row["date"],
+                        "work_minutes": row["minutes"],
+                        "provisional": row["provisional"],
+                        "logs": logs_by_date.get(row["date"], []),
+                    }
+                    for row in attendance
+                ],
+            }
 
     def alerts(self) -> list[Json]:
         alerts = []

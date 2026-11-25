@@ -291,16 +291,12 @@ class Attendance:
             excluded.append((break_left, break_right))
         return working_seconds(left, right, excluded)
 
-    def summary(
-        self, when: date | None = None, limit: int = DEFAULT_WEEKLY_MINUTES
-    ) -> Json:
-        today = when or self.clock().astimezone(SEOUL).date()
-        monday = today - timedelta(days=today.weekday())
-        beginning = datetime.combine(monday, time.min, SEOUL)
-        sessions = self.list()
-        rules = self.rules()
+    def _daily_totals(
+        self, first: date, days: int, sessions: list[Json], rules: Json
+    ) -> list[Json]:
+        beginning = datetime.combine(first, time.min, SEOUL)
         daily = []
-        for offset in range(7):
+        for offset in range(days):
             start = beginning + timedelta(days=offset)
             end = start + timedelta(days=1)
             seconds = sum(
@@ -313,8 +309,37 @@ class Attendance:
                     "minutes": seconds // 60,
                 }
             )
+        return daily
+
+    def daily_totals(self, first: date, days: int) -> list[Json]:
+        sessions = self.list()
+        daily = self._daily_totals(first, days, sessions, self.rules())
+        active = next((session for session in sessions if session["end"] is None), None)
+        now = self.clock().astimezone(SEOUL).date().isoformat()
+        active_date = (
+            moment(active["start"]).astimezone(SEOUL).date().isoformat()
+            if active
+            else None
+        )
+        return [
+            {
+                **row,
+                "provisional": active_date is not None
+                and active_date <= row["date"] <= now,
+            }
+            for row in daily
+        ]
+
+    def summary(
+        self, when: date | None = None, limit: int = DEFAULT_WEEKLY_MINUTES
+    ) -> Json:
+        today = when or self.clock().astimezone(SEOUL).date()
+        monday = today - timedelta(days=today.weekday())
+        sessions = self.list()
+        rules = self.rules()
+        daily = self._daily_totals(monday, 7, sessions, rules)
         weekly_minutes = sum(row["seconds"] for row in daily) // 60
-        active = self.active()
+        active = next((session for session in sessions if session["end"] is None), None)
         return {
             "date": today.isoformat(),
             "week_start": monday.isoformat(),

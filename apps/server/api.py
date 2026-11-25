@@ -174,6 +174,10 @@ def create_app(
             store.touched = last_activity
             return result
 
+    @app.get("/api/calendar")
+    def monthly_calendar(month: str) -> Json:
+        return core.monthly_calendar(month)
+
     @app.get("/api/weekly-meetings/preview")
     def weekly_meeting_preview(start_date: str, end_date: str) -> Json:
         with store.transaction():
