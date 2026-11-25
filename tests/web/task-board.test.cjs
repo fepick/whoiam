@@ -29,6 +29,22 @@ test('업데이트 안내는 신규 버전을 표시하고 공식 릴리스 링�
   assert.match(vm.runInContext('updateMarkup()', context), /확인하지 못했습니다/);
 });
 
+test('달력은 하루 근무시간으로 색을 정하고 선택한 날의 시간도 표시한다', () => {
+  const context = application();
+  const date = '2026-11-06';
+  vm.runInContext(`data.today = calendar.selected = '${date}';`, context);
+  for (const [minutes, color] of [
+    [0, 'none'], [359, 'light-green'], [360, 'green'], [419, 'green'],
+    [420, 'blue'], [480, 'blue'], [481, 'orange'], [599, 'orange'], [600, 'red']
+  ]) {
+    context.row = {date, work_minutes: minutes, logs: [{task_id: 'test', title: '가상 업무'}]};
+    const html = vm.runInContext('calendarDayView(row)', context);
+    assert.match(html, new RegExp(`data-work-color="${color}"`));
+    assert.match(html, /aria-pressed="true" aria-current="date"/);
+  }
+  assert.match(vm.runInContext('calendarDayView(row)', context), /근무 10시간/);
+});
+
 test('퇴근 확인은 서버 응답에 보고서가 있어도 편집 중인 보고서를 교체하지 않는다', async () => {
   const context = application();
   vm.runInContext(`

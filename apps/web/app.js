@@ -488,14 +488,24 @@ function adjacentMonth(month, offset) {
   return date.toISOString().slice(0, 7);
 }
 
+const calendarWorkBands = [
+  {upTo: 0, color: 'none', label: '0시간'},
+  {upTo: 359, color: 'light-green', label: '6시간 미만'},
+  {upTo: 419, color: 'green', label: '6시간 이상 · 7시간 미만'},
+  {upTo: 480, color: 'blue', label: '7~8시간'},
+  {upTo: 599, color: 'orange', label: '8시간 초과 · 10시간 미만'},
+  {upTo: Infinity, color: 'red', label: '10시간 이상'}
+];
+
 function calendarDayView(row) {
   const tasks = new Map(row.logs.map(log => [log.task_id, log.title]));
   const hours = Math.floor(row.work_minutes / 60);
   const minutes = row.work_minutes % 60;
   const time = [hours ? `${hours}시간` : '', minutes ? `${minutes}분` : ''].filter(Boolean).join(' ');
   const work = time || (row.provisional ? '0분' : '');
+  const {color} = calendarWorkBands.find(band => row.work_minutes <= band.upTo);
   const details = [row.date, tasks.size ? `업무 ${tasks.size}건` : '', work ? `근무 ${work}` : '', row.provisional ? '잠정' : ''];
-  return `<button type="button" class="calendar-day" data-calendar-date="${esc(row.date)}"
+  return `<button type="button" class="calendar-day" data-calendar-date="${esc(row.date)}" data-work-color="${color}"
     aria-label="${esc(details.filter(Boolean).join(' · '))}"
     aria-pressed="${row.date === calendar.selected}" ${row.date === data.today ? 'aria-current="date"' : ''}>
     <span class="calendar-day-number">${Number(row.date.slice(-2))}</span>
@@ -522,6 +532,9 @@ function calendarView() {
     ${calendar.error ? `<p class="form-error" role="alert">${esc(calendar.error)}</p>${button('calendar-retry','다시 조회')}` : ''}
     ${summary ? `<p class="calendar-summary">이달 근무 <strong>${duration(summary.work_minutes)}</strong>
       ${summary.days.some(row => row.provisional) ? '<small>* 진행 중인 근무를 포함한 잠정 시간</small>' : ''}</p>
+      <ul class="calendar-legend" aria-label="하루 근무시간 범례">${calendarWorkBands.map(({color, label}) =>
+        `<li data-work-color="${color}"><span aria-hidden="true"></span>${label}</li>`
+      ).join('')}</ul>
       <div class="calendar-grid">
         ${['월','화','수','목','금','토','일'].map(day => `<span class="calendar-weekday">${day}</span>`).join('')}
         ${'<span class="calendar-blank" aria-hidden="true"></span>'.repeat(summary.first_weekday)}
